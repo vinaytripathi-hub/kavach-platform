@@ -8,6 +8,36 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — W01-S02 Block C (this commit)
+
+- `docs/adr/README.md` — index document for Architecture Decision
+  Records, with format conventions, status meanings, and rationale
+  for the ADR practice.
+- `docs/adr/0001-three-layer-architecture.md` — substrate / use cases
+  / experiences three-layer architecture.
+- `docs/adr/0002-substrate-first-build-order.md` — substrate first,
+  use cases on top of it, experiences last.
+- `docs/adr/0003-pramana-kavach-separation.md` — strict IP boundary
+  between Pramana (AGPL-3.0 open-source substrate) and Kavach
+  (proprietary commercial layer); Pattern B editable install for
+  development; "Kavach contains no Pramana source code" as a
+  durable commitment.
+- `docs/adr/0004-self-hosted-postgres-on-yotta.md` — self-hosted
+  PostgreSQL 16 on Yotta Yntraa for sovereign Indian data
+  residency; matches CI integration-test target.
+- `docs/adr/0005-accountability-positioning.md` — "Agent
+  Accountability for Indian BFSI" as the market wedge; BFSI-first
+  not BFSI-only.
+- `docs/adr/0006-tdd-discipline.md` — TDD as the engineering
+  default; coverage floors (80% capabilities/events/composition/query,
+  70% usecases/experiences); test pyramid; signed-commit
+  requirement; pre-commit and CI enforcement.
+
+### Removed — W01-S02 Block C (this commit)
+
+- `docs/adr/.gitkeep` — placeholder removed now that real ADRs
+  populate the directory.
+
 ### Added — W01-S02 Block B (this commit set: 3 commits)
 
 - **Directory skeleton** for the modular substrate architecture:
