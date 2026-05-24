@@ -1,0 +1,92 @@
+# Pre-commit hook configuration for Kavach Platform.
+#
+# See ADR-0006 (Block C) and docs/engineering-handbook.md (Block E) for
+# the engineering discipline rationale.
+#
+# Install hooks once after running scripts/dev-setup.sh:
+#   pre-commit install --hook-type pre-commit  # runs on every commit
+#   pre-commit install --hook-type pre-push    # runs on every push
+#
+# Run manually:
+#   pre-commit run --all-files
+
+default_language_version:
+  python: python3.12
+
+default_stages: [pre-commit]
+
+repos:
+  # -------------------------------------------------------------------------
+  # Generic hygiene hooks (run on every commit)
+  # -------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+
+  # -------------------------------------------------------------------------
+  # Ruff: linter + formatter (fast; runs on every commit, changed files only)
+  # -------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.7
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # -------------------------------------------------------------------------
+  # Mypy: strict type checking (fast on changed files)
+  # -------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.6.0
+          - types-pyyaml
+        args: [--config-file=pyproject.toml]
+        files: ^(kavach|tests)/.*\.py$
+
+  # -------------------------------------------------------------------------
+  # Local hooks: fast pytest on commit, full suite + GPG check on push
+  # -------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      # Pre-commit: fast unit tests (no coverage, no slow tests)
+      # Aim: <10s total. Catches the obvious breakage before the commit lands.
+      - id: pytest-unit-fast
+        name: pytest unit tests (fast)
+        entry: pytest -m "unit and not slow" --tb=short -q --no-cov
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Pre-push: full unit + integration suite with coverage gate
+      # Aim: <5 min. Catches anything the fast suite missed.
+      # Coverage floor (--cov-fail-under=70) is global for now; per-package
+      # floors come in W01-S03.
+      - id: pytest-push-suite
+        name: pytest unit + integration with coverage gate
+        entry: pytest -m "unit or integration" --cov --cov-fail-under=70
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Pre-push: enforce GPG signature on the latest commit when pushing to main
+      - id: gpg-signature-required-on-main
+        name: enforce GPG signatures on main branch
+        entry: scripts/check-gpg-signature.sh
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
