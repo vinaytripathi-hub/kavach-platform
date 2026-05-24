@@ -63,11 +63,12 @@ metadata is updated but its file remains and its number is preserved.
 | 0008 | Accepted | Domain events as the substrate's primary output |
 | 0009 | Accepted | Read-side projections over the event stream |
 | 0010 | Accepted | Event schema versioning and stability |
+| 0011 | Accepted | Sub-product extraction posture |
+| 0012 | Accepted | Decision events carry evidence, reasoning, and confidence |
 
-Additional ADRs covering sub-product extraction posture, decision
-evidence and reasoning, multimodal data sufficiency, and multidimensional
-trust are planned for W01-S02 Block D sub-blocks D.3–D.4 (numbers
-0011–0014).
+Additional ADRs covering multimodal data sufficiency and
+multidimensional trust are planned for W01-S02 Block D sub-block
+D.4 (numbers 0013–0014).
 
 ## Adding a new ADR
 

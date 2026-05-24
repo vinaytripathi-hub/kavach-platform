@@ -8,6 +8,35 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — W01-S02 Block D.3 (this commit)
+
+- `docs/adr/0011-sub-product-extraction-posture.md` — capabilities
+  classified by extraction potential. High-extractability (Audit,
+  Policy, Operator Console) designed strictly for standalone
+  packaging: no implicit cross-capability dependencies, self-contained
+  data models, self-contained event vocabularies, independent
+  versioning posture. Low-extractability (Enrichment, DPI bridge,
+  SDK bridge) accept Kavach-only coupling. Mixed (Storage,
+  Composition, Events) handled case-by-case. Optionality preserved
+  even if extraction is never exercised; discipline produces
+  better-isolated capabilities regardless.
+- `docs/adr/0012-decision-events-with-evidence-and-reasoning.md`
+  — every decision event the substrate emits carries four mandatory
+  embedded fields: Evidence (structured inputs, by-reference for
+  large records), ReasoningTrace (rule/model/composite/human with
+  decision path), Confidence (rule_deterministic / probabilistic /
+  human_judged with calibration metadata), and decided-by (which
+  rule/model/operator produced the decision). Feedback events
+  (DecisionFeedbackRecorded) close the FP/FN loop and become
+  labeled training data. Decision-primitive types versioned per
+  ADR-0010. Privacy via inline-vs-reference data minimization.
+
+### Changed — W01-S02 Block D.3
+
+- `docs/adr/README.md` — "Current ADRs" table extended with rows
+  for 0011 and 0012; "planned ADRs" paragraph trimmed to mention
+  only 0013–0014.
+
 ### Added — W01-S02 Block D.2 (this commit)
 
 - `docs/adr/0009-read-side-projections.md` — projections under
