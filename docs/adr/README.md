@@ -65,10 +65,14 @@ metadata is updated but its file remains and its number is preserved.
 | 0010 | Accepted | Event schema versioning and stability |
 | 0011 | Accepted | Sub-product extraction posture |
 | 0012 | Accepted | Decision events carry evidence, reasoning, and confidence |
+| 0013 | Accepted | Multimodal data sufficiency |
+| 0014 | Accepted | Multidimensional trust substrate |
 
-Additional ADRs covering multimodal data sufficiency and
-multidimensional trust are planned for W01-S02 Block D sub-block
-D.4 (numbers 0013–0014).
+ADRs 0001–0014 cover the foundational and advanced architectural
+commitments for Kavach Platform's substrate and product positioning.
+W01-S02 produced this complete initial set across Blocks C and D.
+Subsequent ADRs (0015 and beyond) will be added as new architectural
+decisions arise during W01-S03+ and subsequent sprints.
 
 ## Adding a new ADR
 

@@ -8,6 +8,41 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — W01-S02 Block D.4 (this commit)
+
+- `docs/adr/0013-multimodal-data-sufficiency.md` — every
+  data-driven substrate output carries a `DataSufficiency`
+  indicator with four bands (cold / thin / warm / warm_stale),
+  per-modality breakdowns (observations counts, earliest/latest
+  timestamps, reasons), and a conservative "worst-band-wins"
+  default composition. Cold-start agents emit honest cold-band
+  outputs rather than fabricated authoritative ones. Downstream
+  policy, anomaly detection, and operator console all read
+  sufficiency. Decision events embed their inputs' sufficiency
+  in evidence per ADR-0012.
+- `docs/adr/0014-multidimensional-trust-substrate.md` — trust
+  in the Kavach substrate is a tensor, not a scalar.
+  `TrustAssessment` carries a dict of `TrustDimension` (each
+  with value, per-dimension `DataSufficiency`, contributors,
+  reason) and an optional `CompositionSpec` for context-dependent
+  rollup. Substrate ships core BFSI-relevant dimensions
+  (credential_integrity, behavioral_consistency, policy_compliance,
+  outcome_quality, peer_alignment); use cases extend the set.
+  Different policies in the same use case may use different
+  compositions; the choice is decision-grade. The first
+  TrustAssessmentEmitted event uses the multidimensional schema
+  from day one (potentially with a single dimension), avoiding
+  later wholesale migration. Neural engine framing is a
+  projection over the substrate, not an alternative to it.
+
+### Changed — W01-S02 Block D.4
+
+- `docs/adr/README.md` — "Current ADRs" table extended with rows
+  for 0013 and 0014; "planned ADRs" paragraph replaced with a
+  closing note that Blocks C and D produced the complete initial
+  ADR set 0001–0014; subsequent ADRs will be added as new
+  decisions arise.
+
 ### Added — W01-S02 Block D.3 (this commit)
 
 - `docs/adr/0011-sub-product-extraction-posture.md` — capabilities
