@@ -53,6 +53,7 @@ repos:
         additional_dependencies:
           - pydantic>=2.6.0
           - types-pyyaml
+          - pytest>=8.0.0
         args: [--config-file=pyproject.toml]
         files: ^(kavach|tests)/.*\.py$
 
