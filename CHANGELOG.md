@@ -8,6 +8,30 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — W01-S02 Block D.2 (this commit)
+
+- `docs/adr/0009-read-side-projections.md` — projections under
+  `kavach/query/projections/` are top-level substrate concerns (not
+  inside any capability). Each projection declares the events it
+  consumes, the projection tables it maintains, a handler function,
+  and a `rebuild()` method for replay-based backfill. Synchronous
+  updates by default (same transaction as the producing event);
+  asynchronous via outbox for the rare expensive case. Projections
+  are derivative; the event log is source of truth.
+- `docs/adr/0010-event-schema-versioning.md` — event schemas are
+  public API. Three change classes: additive (no bump), compatible
+  (no bump, reviewed), breaking (new version + four-phase rollout).
+  Versioned classes accumulate; retired versions move to
+  `_archive/` but remain importable for replay. Decision events'
+  embedded evidence and reasoning types are versioned too.
+
+### Changed — W01-S02 Block D.2
+
+- `docs/adr/README.md` — "Current ADRs" table extended with rows
+  for 0009 and 0010; "planned ADRs" paragraph updated to reflect
+  that 0009 and 0010 are now Accepted (remaining planned:
+  0011–0014).
+
 ### Added — W01-S02 Block D.1 (this commit)
 
 - `docs/adr/0007-modular-capability-architecture.md` — per-capability
