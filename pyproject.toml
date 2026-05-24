@@ -1,0 +1,318 @@
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+# ============================================================================
+# Project metadata
+# ============================================================================
+
+[project]
+name = "kavach-platform"
+version = "0.0.1"
+description = "Kavach Platform — Agent Accountability for Indian BFSI (proprietary, all rights reserved)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = {text = "Proprietary — All Rights Reserved"}
+authors = [
+    {name = "Vinay Tripathi", email = "vinay@aurviaglobal.com"},
+]
+maintainers = [
+    {name = "Vinay Tripathi", email = "vinay@aurviaglobal.com"},
+]
+keywords = ["bfsi", "agent-accountability", "credentials", "audit", "kavach", "aurvia"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Other Audience",
+    "License :: Other/Proprietary License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Typing :: Typed",
+    "Private :: Do Not Upload",
+]
+
+# Runtime dependencies.
+#
+# Pramana is declared here as a future-PyPI dependency (>=0.1.0,<0.2.0).
+# It is currently not published to PyPI; the developer bootstrap script
+# (scripts/dev-setup.sh) installs Pramana in editable mode from the local
+# checkout at ../Pramana-protocol/sdk/python, which overrides this PyPI
+# declaration during development. When Pramana ships to PyPI (planned for
+# W01-S05 or later), this declaration becomes the authoritative version
+# constraint and editable-install overrides become optional.
+#
+# All other dependencies use lower-bound minimums with major-version caps
+# to allow patch and minor updates without breaking changes.
+dependencies = [
+    # Foundational substrate (AGPL-3.0; see NOTICE)
+    "pramana>=0.1.0,<0.2.0",
+
+    # Web framework (substrate operator console + API surface — Block E onward)
+    "fastapi>=0.110.0,<0.120.0",
+    "uvicorn[standard]>=0.27.0,<0.35.0",
+
+    # HTTP client (for DPI integrations and inter-service comm)
+    "httpx>=0.27.0,<0.30.0",
+    "anyio>=4.3.0,<5.0.0",
+
+    # Data validation and configuration
+    "pydantic>=2.6.0,<3.0.0",
+    "pydantic-settings>=2.2.0,<3.0.0",
+
+    # Database — Postgres 16 per ADR-0004 (Block C)
+    "sqlalchemy[asyncio]>=2.0.27,<3.0.0",
+    "alembic>=1.13.0,<2.0.0",
+    "asyncpg>=0.29.0,<1.0.0",
+    "psycopg[binary]>=3.1.18,<4.0.0",
+
+    # Cryptography
+    "cryptography>=42.0.0,<46.0.0",
+    "pyjwt[crypto]>=2.8.0,<3.0.0",
+
+    # Structured logging — substrate emits structured events via structlog
+    # bridge to the event bus (Block E). Application-layer logging is
+    # event-based per ADR-0008 (Block D); structlog handles the bridging.
+    "structlog>=24.1.0,<26.0.0",
+
+    # Configuration loading
+    "python-dotenv>=1.0.1,<2.0.0",
+    "pyyaml>=6.0.1,<7.0.0",
+]
+
+# Optional dependency groups.
+#
+# [dev] is the dev/test toolchain. Installed by scripts/dev-setup.sh.
+[project.optional-dependencies]
+dev = [
+    # Test framework
+    "pytest>=8.0.0,<9.0.0",
+    "pytest-cov>=4.1.0,<6.0.0",
+    "pytest-asyncio>=0.23.5,<1.0.0",
+    "pytest-xdist>=3.5.0,<4.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-timeout>=2.2.0,<3.0.0",
+
+    # Property-based testing (validators, parsers, hash chains)
+    "hypothesis>=6.98.0,<7.0.0",
+
+    # Snapshot testing (audit records, VC structures, event shapes)
+    "syrupy>=4.6.1,<5.0.0",
+
+    # Linting and formatting
+    "ruff>=0.3.0,<0.10.0",
+
+    # Type checking — strict mode per ADR-0006
+    "mypy>=1.9.0,<2.0.0",
+    "types-pyyaml",
+
+    # Pre-commit hooks
+    "pre-commit>=3.6.0,<5.0.0",
+
+    # Dependency analysis (third-party license manifest regeneration)
+    "pip-licenses>=4.4.0,<6.0.0",
+
+    # Test utilities
+    "freezegun>=1.4.0,<2.0.0",
+    "respx>=0.21.0,<1.0.0",
+    "factory-boy>=3.3.0,<4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/vinaysflow/kavach-platform"
+Repository = "https://github.com/vinaysflow/kavach-platform"
+
+# ============================================================================
+# Build system (hatchling) — wheel packaging
+# ============================================================================
+
+[tool.hatch.build.targets.wheel]
+packages = ["kavach"]
+
+[tool.hatch.version]
+path = "kavach/__init__.py"
+
+# ============================================================================
+# Pytest configuration
+# ============================================================================
+#
+# See ADR-0006 (Block C) for the testing discipline rationale and the test
+# pyramid (unit / integration / e2e). Test markers are auto-applied by
+# tests/conftest.py based on the test's location in the tests/ tree.
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+    "--tb=short",
+    "--cov=kavach",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml:coverage.xml",
+    "--cov-branch",
+]
+markers = [
+    "unit: Unit tests (fast, isolated, no I/O)",
+    "integration: Integration tests (DB, HTTP, file system, real dependencies)",
+    "e2e: End-to-end tests (slow, full system, exercised user-facing flows)",
+    "slow: Tests taking >1s individually",
+    "external: Tests requiring external services (Aadhaar mock, etc.)",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pkg_resources.*",
+    "ignore::PendingDeprecationWarning",
+]
+timeout = 30
+timeout_method = "thread"
+# By default, exclude integration and e2e from a bare `pytest` invocation;
+# they have their own targeted invocations in CI and in pre-push hooks.
+# This keeps local TDD feedback loops fast.
+# Use `pytest -m integration` or `pytest -m e2e` to run them explicitly.
+
+# ============================================================================
+# Coverage configuration
+# ============================================================================
+#
+# Coverage floors per ADR-0006 (Block C):
+#   - kavach.capabilities.*  ≥ 80% line + branch
+#   - kavach.usecases.*      ≥ 70%
+#   - kavach.experiences.*   ≥ 70%
+#   - kavach.events / .composition / .query  ≥ 80%
+#
+# CI enforces these via --cov-fail-under in the unit-tests job (see
+# .github/workflows/ci.yml). Initially set to 80 globally; will be split
+# per-package in W01-S03 when the first real capability lands and we know
+# what realistic coverage looks like.
+
+[tool.coverage.run]
+branch = true
+source = ["kavach"]
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ============================================================================
+# Ruff — linter and formatter
+# ============================================================================
+#
+# Ruff replaces black + isort + flake8 + pyupgrade + bandit + many others
+# with a single fast tool. Pre-commit runs ruff on every commit; CI runs
+# `ruff check` (linting) and `ruff format --check` (format check) as gates.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["docs/", "scripts/"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear (likely bugs and design problems)
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade (modern syntax)
+    "SIM",    # flake8-simplify
+    "RUF",    # ruff-specific rules
+    "ASYNC",  # flake8-async
+    "S",      # bandit (security)
+    "ARG",    # unused arguments
+    "PTH",    # use pathlib over os.path
+    "PL",     # pylint
+    "TRY",    # tryceratops (better try/except patterns)
+    "DTZ",    # flake8-datetimez (timezone awareness)
+    "FBT",    # flake8-boolean-trap (boolean positional args)
+    "ANN",    # flake8-annotations (type hint requirements)
+]
+ignore = [
+    "ANN101",   # missing type annotation for self — pointless
+    "ANN102",   # missing type annotation for cls — pointless
+    "PLR0913",  # too many arguments — fine for some APIs
+    "S101",     # use of assert — we use it in tests
+    "TRY003",   # raise with long message — fine for ours
+    "FBT003",   # boolean positional value in function call — too pedantic for callsites
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use asserts, magic values, and hardcoded passwords (test fixtures)
+"tests/**/*.py" = ["S101", "PLR2004", "S106", "ANN", "FBT"]
+# Scripts can use subprocess
+"scripts/**/*.py" = ["S603", "S607"]
+# Conftest gets some extra leniency
+"conftest.py" = ["ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint.isort]
+known-first-party = ["kavach"]
+known-third-party = ["pramana"]
+
+# ============================================================================
+# Mypy — strict type checking
+# ============================================================================
+#
+# Strict mode per ADR-0006 (Block C). All public APIs must have complete
+# type hints. Tests get a relaxed configuration via override below.
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+strict_equality = true
+strict_concatenate = true
+# Pretty output
+pretty = true
+show_error_codes = true
+show_error_context = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# Pramana is consumed via its public SDK; until Pramana ships type stubs,
+# allow mypy to be lenient on Pramana-originated types. This will tighten
+# in W01-S05 when Pramana publishes its first PyPI release.
+[[tool.mypy.overrides]]
+module = "pramana.*"
+ignore_missing_imports = true

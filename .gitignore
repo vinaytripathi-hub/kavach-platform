@@ -29,7 +29,6 @@ pip-delete-this-directory.txt
 venv/
 env/
 ENV/
-.python-version
 
 # Test / coverage
 .tox/
