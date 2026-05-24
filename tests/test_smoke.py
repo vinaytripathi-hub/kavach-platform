@@ -11,6 +11,7 @@ This file will remain in place until W01-S03 lands the first real
 capability, at which point a more substantive set of smoke tests at the
 capability level will replace this single test file.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -88,3 +89,47 @@ def test_pytest_parametrize_works(operation: str, expected: object) -> None:
     else:
         pytest.fail(f"Unknown operation: {operation}")
     assert result == expected
+
+
+def test_pramana_import_resolves() -> None:
+    """The aurvia-pramana distribution is installed and import pramana resolves.
+
+    This smoke test pins the substrate's foundational dependency:
+    - `import pramana` must succeed (no ModuleNotFoundError).
+    - `pramana.__version__` must be present and match the expected version.
+    - `pramana.__file__` must resolve to a real path on disk.
+
+    During development (editable install from ../Pramana-protocol/sdk/python),
+    the resolution path is under the local Pramana checkout. In CI and
+    production, the resolution path is under .venv/lib/.../site-packages/.
+    Either is valid as long as the version matches what we expect.
+
+    Per ADR-0003 (W01-S02 Block C), the import name `pramana` is decoupled
+    from the PyPI distribution name `aurvia-pramana`. This test verifies
+    the import name; the distribution name is verified by `pyproject.toml`
+    constraint plus successful resolution by the package manager.
+    """
+    import pramana
+
+    # The import succeeded if we got here.
+    assert pramana is not None
+
+    # Version is present and is the expected 0.3.0-line.
+    assert hasattr(pramana, "__version__"), (
+        "pramana.__version__ is missing — likely the wrong package "
+        "(perhaps the abandoned PyPI 'pramana' placeholder is being "
+        "resolved instead of aurvia-pramana). Run "
+        "`uv pip show aurvia-pramana` to confirm the install."
+    )
+    assert pramana.__version__ == "0.3.0", (
+        f"Expected pramana 0.3.0, got {pramana.__version__}. "
+        f"This may indicate the aurvia-pramana dependency in pyproject.toml "
+        f"is out of sync with the local checkout, or a stale install is "
+        f"sitting in the venv."
+    )
+
+    # File path resolves to something real.
+    assert pramana.__file__ is not None
+    assert Path(
+        pramana.__file__
+    ).is_file(), f"pramana.__file__ ({pramana.__file__}) is not a real file."

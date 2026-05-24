@@ -35,19 +35,23 @@ classifiers = [
 
 # Runtime dependencies.
 #
-# Pramana is declared here as a future-PyPI dependency (>=0.1.0,<0.2.0).
-# It is currently not published to PyPI; the developer bootstrap script
-# (scripts/dev-setup.sh) installs Pramana in editable mode from the local
-# checkout at ../Pramana-protocol/sdk/python, which overrides this PyPI
-# declaration during development. When Pramana ships to PyPI (planned for
-# W01-S05 or later), this declaration becomes the authoritative version
-# constraint and editable-install overrides become optional.
+# The Pramana Python SDK is consumed via the aurvia-pramana PyPI
+# distribution. The Python import name is `pramana` (decoupled from the
+# distribution name); all Kavach code uses `import pramana` regardless of
+# how the distribution is fetched. During development, scripts/dev-setup.sh
+# overrides the PyPI declaration with an editable install from the local
+# Pramana-protocol checkout at ../Pramana-protocol/sdk/python (Pattern B
+# per ADR-0003, formalized in W01-S02 Block C). CI and production install
+# from PyPI per the version constraint declared below. When Pramana 1.0
+# stable ships (after BFSI Tier-A pilot deployment, external API audit,
+# and ≥3 months stable on PyPI), the constraint will be tightened to
+# pin a semver range under 1.x.
 #
 # All other dependencies use lower-bound minimums with major-version caps
 # to allow patch and minor updates without breaking changes.
 dependencies = [
     # Foundational substrate (AGPL-3.0; see NOTICE)
-    "pramana>=0.1.0,<0.2.0",
+    "aurvia-pramana>=0.3.0,<1.0.0",
 
     # Web framework (substrate operator console + API surface — Block E onward)
     "fastapi>=0.110.0,<0.120.0",
