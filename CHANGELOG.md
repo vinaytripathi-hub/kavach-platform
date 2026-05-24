@@ -8,6 +8,30 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — W01-S02 Block D.1 (this commit)
+
+- `docs/adr/0007-modular-capability-architecture.md` — per-capability
+  structural discipline: `__init__.py` as the only public surface,
+  `_internal/` for private implementation, `events.py` for emitted
+  events, `contracts.py` for Protocol-based dependencies,
+  `extension_points.py` for use-case-implementable interfaces.
+  Composition layer (`kavach/composition/`) wires concrete
+  implementations to Protocols at startup.
+- `docs/adr/0008-events-as-substrate-primary-output.md` — domain
+  events are the substrate's primary contract with the rest of the
+  system. Capabilities are event transformers; internal state is a
+  private implementation convenience. Pragmatic event-driven
+  (not pure event sourcing): state lives in Postgres tables for
+  queryability, events emitted alongside state changes. Correctness
+  lives at three layers (logic, event boundary, system). Frontend
+  reads projections built from events, not capability internal state.
+
+### Changed — W01-S02 Block D.1
+
+- `docs/adr/README.md` — "Current ADRs" table extended with rows for
+  0007 and 0008; "planned ADRs" paragraph updated to reflect that
+  0007 and 0008 are now Accepted (remaining planned: 0009–0014).
+
 ### Added — W01-S02 Block C (this commit)
 
 - `docs/adr/README.md` — index document for Architecture Decision

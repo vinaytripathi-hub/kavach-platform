@@ -59,12 +59,13 @@ metadata is updated but its file remains and its number is preserved.
 | 0004 | Accepted | Self-hosted Postgres 16 on Yotta Yntraa for data residency |
 | 0005 | Accepted | "Accountability for BFSI agents" market positioning |
 | 0006 | Accepted | TDD as the engineering default |
+| 0007 | Accepted | Modular capability architecture with formal extension points |
+| 0008 | Accepted | Domain events as the substrate's primary output |
 
-Additional ADRs covering modular capability architecture, events as the
-substrate's primary output, projections, sub-product extraction posture,
-decision evidence and reasoning, multimodal data sufficiency, and
-multidimensional trust are planned for W01-S02 Block D (numbers
-0007–0014).
+Additional ADRs covering read-side projections, event schema versioning,
+sub-product extraction posture, decision evidence and reasoning,
+multimodal data sufficiency, and multidimensional trust are planned for
+W01-S02 Block D sub-blocks D.2–D.4 (numbers 0009–0014).
 
 ## Adding a new ADR
 
