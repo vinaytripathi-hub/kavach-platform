@@ -1,0 +1,748 @@
+openapi: 3.1.0
+info:
+  title: Kavach Platform API
+  version: "1.0.0"
+  description: |
+    Agent Accountability for Indian BFSI.
+
+    This is the frozen v1 external contract for the Kavach substrate
+    (ADR-0016). Request and response bodies echo the substrate event
+    schemas under `kavach/events/schemas/` (ADR-0008); the API layer
+    adds only transport concerns (pagination, problem+json errors,
+    idempotency).
+
+    Two principal classes authenticate (ADR-0016):
+      - Agents present a Pramana-issued credential (bearer VP/JWT),
+        verified by the sdk_bridge capability (ADR-0015).
+      - Operators/admins present a Kavach-issued JWT.
+
+    Errors follow RFC 7807 (application/problem+json). State-changing
+    POSTs accept an Idempotency-Key header and deduplicate per tenant.
+  contact:
+    name: Aurvia Global
+    email: vinay@aurviaglobal.com
+  license:
+    name: Proprietary - All Rights Reserved
+
+servers:
+  - url: https://{host}/v1
+    description: On-prem deployment (ADR-0017)
+    variables:
+      host:
+        default: localhost:8000
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: ingress
+    description: Recording agent activity
+  - name: decisions
+    description: Pre-action policy decisions and human-in-the-loop step-up
+  - name: trust
+    description: Multidimensional trust assessments and timelines
+  - name: audit
+    description: Cryptographically signed evidence export
+  - name: webhooks
+    description: Outbound event subscriptions
+  - name: admin
+    description: Agent registration and policy management
+  - name: system
+    description: Health and readiness
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Liveness and readiness probe
+      security: []
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /agents/{agent_id}/actions:
+    post:
+      tags: [ingress]
+      summary: Record an action an agent executed
+      operationId: recordAction
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRecordRequest"
+      responses:
+        "201":
+          description: Action recorded; an ActionExecuted event was emitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventReceipt"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /agents/{agent_id}/decisions:
+    post:
+      tags: [decisions]
+      summary: Request a synchronous policy decision before an agent acts
+      description: |
+        Evaluates the agent's proposed action against the active policy
+        rule set. Returns allow, deny, or step_up. A step_up outcome
+        means a human must approve via the step-up resolve endpoint
+        (EU AI Act Article 14 oversight; ADR-0012).
+      operationId: requestDecision
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Decision rendered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /decisions/{decision_id}/step-up/resolve:
+    post:
+      tags: [decisions]
+      summary: Operator resolves a pending step-up decision
+      operationId: resolveStepUp
+      parameters:
+        - $ref: "#/components/parameters/DecisionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepUpResolveRequest"
+      responses:
+        "200":
+          description: Step-up resolved; a StepUpResolved event was emitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Step-up already resolved
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /step-ups:
+    get:
+      tags: [decisions]
+      summary: List pending step-up decisions (operator console)
+      operationId: listStepUps
+      responses:
+        "200":
+          description: Pending step-ups for the tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StepUpQueuePage"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /agents/{agent_id}/trust:
+    get:
+      tags: [trust]
+      summary: Current multidimensional trust assessment for an agent
+      description: |
+        Returns the trust tensor (ADR-0014): per-dimension values, each
+        with its own data sufficiency (ADR-0013), plus an optional
+        composed scalar if a composition spec is supplied.
+      operationId: getTrust
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: context
+          in: query
+          required: false
+          schema: { type: string }
+          description: Use-case/workflow context for the assessment
+      responses:
+        "200":
+          description: Current trust assessment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustAssessment"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{agent_id}/timeline:
+    get:
+      tags: [trust]
+      summary: Paginated activity timeline for an agent
+      operationId: getTimeline
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Timeline page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelinePage"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /audit/exports:
+    post:
+      tags: [audit]
+      summary: Request a cryptographically signed evidence pack
+      description: |
+        Produces a time-bounded export of the HMAC-chained audit
+        records (ADR-0012) with a detached signature manifest. Maps to
+        EU AI Act Articles 12 (logging) and 13 (transparency).
+      operationId: requestAuditExport
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditExportRequest"
+      responses:
+        "202":
+          description: Export accepted and ready (prototype produces synchronously)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExportStatus"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /audit/exports/{export_id}:
+    get:
+      tags: [audit]
+      summary: Poll and download an evidence pack
+      operationId: getAuditExport
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Export status with embedded signed pack when ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExportStatus"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /webhooks/subscriptions:
+    post:
+      tags: [webhooks]
+      summary: Subscribe a partner system to substrate events
+      operationId: createWebhookSubscription
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookSubscriptionRequest"
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSubscription"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /admin/agents:
+    post:
+      tags: [admin]
+      summary: Register an agent
+      operationId: registerAgent
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRegistrationRequest"
+      responses:
+        "201":
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRegistration"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /admin/policies:
+    post:
+      tags: [admin]
+      summary: Upload a policy rule set
+      operationId: uploadPolicy
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyUploadRequest"
+      responses:
+        "201":
+          description: Policy rule set accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyUploadResult"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Agent principals present a Pramana-issued credential (VP/JWT).
+        Operator/admin principals present a Kavach-issued JWT.
+
+  parameters:
+    AgentId:
+      name: agent_id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Stable agent identifier (Pramana DID or registered alias)
+    DecisionId:
+      name: decision_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 200 }
+      description: Client-supplied key; replays return the original result
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+      description: Opaque pagination cursor from a prior page
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credential
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Authenticated but not authorized (scope/tenant/delegation)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status, version]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        version: { type: string }
+
+    Problem:
+      type: object
+      description: RFC 7807 problem detail
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          enum:
+            - unauthorized
+            - forbidden
+            - not_found
+            - validation_error
+            - idempotency_conflict
+            - step_up_already_resolved
+            - internal_error
+
+    EventReceipt:
+      type: object
+      required: [event_id, event_type, schema_version, recorded_at]
+      properties:
+        event_id: { type: string, format: uuid }
+        event_type: { type: string }
+        schema_version: { type: integer }
+        recorded_at: { type: string, format: date-time }
+
+    ActionRecordRequest:
+      type: object
+      required: [session_id, action_type, parameters]
+      properties:
+        session_id: { type: string }
+        action_type: { type: string, example: "kyc.document.verify" }
+        parameters:
+          type: object
+          additionalProperties: true
+        context: { type: string, description: "Use-case/workflow context" }
+        occurred_at: { type: string, format: date-time }
+
+    DecisionRequest:
+      type: object
+      required: [session_id, action_type, parameters]
+      properties:
+        session_id: { type: string }
+        action_type: { type: string, example: "account.funds.transfer" }
+        parameters:
+          type: object
+          additionalProperties: true
+        context: { type: string }
+
+    DecisionResponse:
+      type: object
+      required: [decision_id, outcome, evidence, reasoning, confidence]
+      properties:
+        decision_id: { type: string, format: uuid }
+        outcome: { type: string, enum: [allow, deny, step_up] }
+        rule_id: { type: string, nullable: true }
+        evidence: { $ref: "#/components/schemas/Evidence" }
+        reasoning: { $ref: "#/components/schemas/ReasoningTrace" }
+        confidence: { $ref: "#/components/schemas/Confidence" }
+        decided_by: { type: string }
+        data_sufficiency: { $ref: "#/components/schemas/DataSufficiency" }
+        step_up:
+          type: object
+          nullable: true
+          properties:
+            reason: { type: string }
+            required_role: { type: string }
+
+    StepUpResolveRequest:
+      type: object
+      required: [resolution, operator_id]
+      properties:
+        resolution: { type: string, enum: [approve, reject] }
+        operator_id: { type: string }
+        rationale: { type: string }
+
+    StepUpQueueItem:
+      type: object
+      required: [decision_id, agent_id, action_type, reason, required_role, status, requested_at]
+      properties:
+        decision_id: { type: string }
+        agent_id: { type: string }
+        action_type: { type: string }
+        reason: { type: string }
+        required_role: { type: string }
+        status: { type: string, enum: [pending, resolved] }
+        requested_at: { type: string, format: date-time }
+
+    StepUpQueuePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StepUpQueueItem" }
+
+    Evidence:
+      type: object
+      required: [attributes, captured_at]
+      properties:
+        references:
+          type: array
+          items: { $ref: "#/components/schemas/EvidenceReference" }
+        attributes:
+          type: object
+          additionalProperties: true
+        captured_at: { type: string, format: date-time }
+
+    EvidenceReference:
+      type: object
+      required: [kind, ref_id]
+      properties:
+        kind: { type: string, example: "transaction" }
+        ref_id: { type: string }
+        digest: { type: string, description: "Optional content digest" }
+
+    ReasoningTrace:
+      type: object
+      required: [kind, decision_path]
+      properties:
+        kind: { type: string, enum: [rule, model, composite, human] }
+        rule_id: { type: string, nullable: true }
+        model_id: { type: string, nullable: true }
+        model_version: { type: string, nullable: true }
+        features_evaluated:
+          type: array
+          items: { type: string }
+          nullable: true
+        decision_path: { type: string }
+
+    Confidence:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [rule_deterministic, probabilistic, human_judged] }
+        score: { type: number, format: float, nullable: true, minimum: 0, maximum: 1 }
+        calibration: { type: string, nullable: true }
+
+    DataSufficiency:
+      type: object
+      required: [band, modalities, summary]
+      properties:
+        band: { type: string, enum: [cold, thin, warm, warm_stale] }
+        summary: { type: string }
+        modalities:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ModalitySufficiency"
+
+    ModalitySufficiency:
+      type: object
+      required: [modality, band, observations]
+      properties:
+        modality: { type: string }
+        band: { type: string, enum: [cold, thin, warm, warm_stale] }
+        observations: { type: integer }
+        earliest: { type: string, format: date-time, nullable: true }
+        latest: { type: string, format: date-time, nullable: true }
+        reason: { type: string }
+
+    TrustAssessment:
+      type: object
+      required: [agent_id, context, dimensions, assessed_at]
+      properties:
+        agent_id: { type: string }
+        context: { type: string }
+        dimensions:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TrustDimension"
+        composed_scalar: { type: number, format: float, nullable: true }
+        composition:
+          $ref: "#/components/schemas/CompositionSpec"
+        assessed_at: { type: string, format: date-time }
+
+    TrustDimension:
+      type: object
+      required: [name, value, sufficiency]
+      properties:
+        name: { type: string }
+        value: { type: number, format: float, minimum: 0, maximum: 1 }
+        sufficiency: { $ref: "#/components/schemas/DataSufficiency" }
+        contributors:
+          type: array
+          items: { type: string }
+        reason: { type: string }
+
+    CompositionSpec:
+      type: object
+      required: [method]
+      properties:
+        method: { type: string, enum: [weighted_average, min, max, custom] }
+        weights:
+          type: object
+          additionalProperties: { type: number, format: float }
+          nullable: true
+        notes: { type: string }
+
+    TimelinePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TimelineEntry" }
+        next_cursor: { type: string, nullable: true }
+
+    TimelineEntry:
+      type: object
+      required: [event_id, event_type, occurred_at]
+      properties:
+        event_id: { type: string, format: uuid }
+        event_type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        summary: { type: string }
+        outcome: { type: string, nullable: true }
+
+    AuditExportRequest:
+      type: object
+      required: [agent_id, from, to]
+      properties:
+        agent_id: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+
+    AuditExportStatus:
+      type: object
+      required: [export_id, status]
+      properties:
+        export_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, ready, failed] }
+        record_count: { type: integer }
+        chain_head: { type: string, description: "HMAC head of the chained records" }
+        signature_manifest:
+          $ref: "#/components/schemas/SignatureManifest"
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/AuditRecord" }
+
+    SignatureManifest:
+      type: object
+      required: [algorithm, key_id, chain_head, signature]
+      properties:
+        algorithm: { type: string, example: "HMAC-SHA256" }
+        key_id: { type: string }
+        chain_head: { type: string }
+        signature: { type: string }
+        generated_at: { type: string, format: date-time }
+
+    AuditRecord:
+      type: object
+      required: [sequence, event_id, event_type, occurred_at, this_hash]
+      properties:
+        sequence: { type: integer }
+        event_id: { type: string, format: uuid }
+        event_type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        prev_hash: { type: string, nullable: true }
+        this_hash: { type: string }
+        payload_digest: { type: string }
+
+    WebhookSubscriptionRequest:
+      type: object
+      required: [url, event_types]
+      properties:
+        url: { type: string, format: uri }
+        event_types:
+          type: array
+          items: { type: string }
+        secret:
+          type: string
+          description: HMAC signing secret for outbound delivery (write-only)
+
+    WebhookSubscription:
+      type: object
+      required: [subscription_id, url, event_types, active]
+      properties:
+        subscription_id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        event_types:
+          type: array
+          items: { type: string }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    AgentRegistrationRequest:
+      type: object
+      required: [agent_id, display_name]
+      properties:
+        agent_id: { type: string, description: "Pramana DID or alias" }
+        display_name: { type: string }
+        use_case: { type: string, enum: [customer_service, credit_underwriting, trading] }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    AgentRegistration:
+      type: object
+      required: [agent_id, display_name, registered_at]
+      properties:
+        agent_id: { type: string }
+        display_name: { type: string }
+        use_case: { type: string }
+        registered_at: { type: string, format: date-time }
+
+    PolicyUploadRequest:
+      type: object
+      required: [use_case, rules]
+      properties:
+        use_case: { type: string }
+        version: { type: string }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/PolicyRule" }
+
+    PolicyRule:
+      type: object
+      required: [rule_id, action_type, effect]
+      properties:
+        rule_id: { type: string }
+        description: { type: string }
+        action_type: { type: string, description: "Glob over action_type, e.g. account.funds.*" }
+        effect: { type: string, enum: [allow, deny, step_up] }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/PolicyCondition" }
+        step_up_role: { type: string, nullable: true }
+        priority: { type: integer, default: 100 }
+
+    PolicyCondition:
+      type: object
+      required: [attribute, operator, value]
+      properties:
+        attribute: { type: string, example: "parameters.amount" }
+        operator: { type: string, enum: [eq, ne, gt, gte, lt, lte, in, contains] }
+        value: {}
+
+    PolicyUploadResult:
+      type: object
+      required: [use_case, version, rule_count, accepted_at]
+      properties:
+        use_case: { type: string }
+        version: { type: string }
+        rule_count: { type: integer }
+        accepted_at: { type: string, format: date-time }

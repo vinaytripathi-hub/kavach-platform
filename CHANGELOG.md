@@ -8,6 +8,63 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — W01-S03 Working Prototype
+
+- **ADRs 0015–0017** — Pramana SDK packaging and AGPL posture (Protocol-
+  based dependency, offline fake verifier, vendored-wheel bridge);
+  external API surface, contract, and versioning; on-prem deployment
+  posture (single-host Docker Compose first).
+- **`docs/api/openapi.yaml`** — frozen `/v1` external contract (ingress,
+  decisions, step-up resolve, trust, timeline, audit export, webhooks,
+  admin, step-up queue) with RFC 7807 errors and idempotency.
+- **`kavach/events/`** — versioned Pydantic event schemas for the eight
+  core events plus embedded decision primitives (ADR-0012), data
+  sufficiency (ADR-0013), and the multidimensional trust tensor
+  (ADR-0014); a replay registry keyed by `(event_type, schema_version)`.
+- **`kavach/capabilities/storage/`** — async SQLAlchemy models, the event
+  store with a transactional outbox, idempotency and webhook stores, and
+  engine/session helpers; Alembic baseline migration under `migrations/`.
+- **`kavach/capabilities/audit/`** — HMAC-SHA256 hash-chained audit
+  records written transactionally per event, plus a signed evidence-pack
+  exporter and verifier.
+- **`kavach/capabilities/policy/`** — declarative rule model, evaluation
+  engine producing decision-grade events with graduated step-up, and the
+  `PolicyRuleProvider` extension point.
+- **`kavach/capabilities/sdk_bridge/`** — `CredentialVerifier` Protocol
+  with a real Pramana adapter and an offline fake, selectable by config.
+- **`kavach/composition/`** — `build_substrate` wiring, the append-and-
+  fan-out event bus, the transactional substrate service, and the outbox
+  webhook dispatcher worker.
+- **`kavach/query/projections/`** — `agent_timeline`,
+  `agent_trust_current`, `decision_log`, and `step_up_queue` projections,
+  each rebuildable from the event log (ADR-0009).
+- **`kavach/api/`** — FastAPI application implementing the frozen
+  contract, with agent/operator auth, idempotency, and webhook
+  subscriptions; `kavach/server.py` ASGI entrypoint and `kavach/worker.py`
+  dispatcher entrypoint; `kavach/client.py` partner reference client.
+- **Customer Service use case** — `PolicyRuleProvider`, trust-dimension
+  config, and a synthetic agent harness driving the end-to-end demo.
+- **Operator console** — zero-build SPA (`kavach/experiences/operator_console/`)
+  with timeline, trust, step-up queue, and evidence-export screens.
+- **On-prem packaging** — `Dockerfile`, `docker-compose.yml`,
+  `.env.example`, `scripts/smoke-onprem.sh`, and
+  `docs/deployment/on-prem-runbook.md`.
+- **Compliance & security pack** — EU (AI Act + eIDAS/EUDIW) and India
+  (RBI/SEBI/IRDAI/DPDP) regulatory mappings under `docs/compliance/`, plus
+  a security whitepaper, threat model, and DPA template under
+  `docs/security/`.
+- **`docs/roadmap.md`** — phased plan from foundation to on-prem prototype.
+
+### Changed — W01-S03 Working Prototype
+
+- `pyproject.toml` — `aurvia-pramana` moved from a core dependency to the
+  optional `[pramana]` extra (ADR-0015); added a flake8-bugbear immutable-
+  calls allowlist for FastAPI dependency markers; coverage omits the
+  integration-only entrypoints (client, worker, harness).
+- `docs/adr/README.md` — index extended with ADRs 0015–0017.
+- `README.md` — documents the working prototype, dev setup, and on-prem
+  quickstart.
+
 ### Added — W01-S02 Block D.4 (this commit)
 
 - `docs/adr/0013-multimodal-data-sufficiency.md` — every
