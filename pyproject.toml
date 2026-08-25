@@ -35,24 +35,18 @@ classifiers = [
 
 # Runtime dependencies.
 #
-# The Pramana Python SDK is consumed via the aurvia-pramana PyPI
-# distribution. The Python import name is `pramana` (decoupled from the
-# distribution name); all Kavach code uses `import pramana` regardless of
-# how the distribution is fetched. During development, scripts/dev-setup.sh
-# overrides the PyPI declaration with an editable install from the local
-# Pramana-protocol checkout at ../Pramana-protocol/sdk/python (Pattern B
-# per ADR-0003, formalized in W01-S02 Block C). CI and production install
-# from PyPI per the version constraint declared below. When Pramana 1.0
-# stable ships (after BFSI Tier-A pilot deployment, external API audit,
-# and ≥3 months stable on PyPI), the constraint will be tightened to
-# pin a semver range under 1.x.
+# Per ADR-0015, the substrate depends on the Pramana SDK through a
+# Protocol (the sdk_bridge capability), not a hard import. The default
+# offline verifier requires no SDK, so `aurvia-pramana` is an OPTIONAL
+# dependency (the `pramana` extra below) rather than a core requirement.
+# This lets the core install — and the fake-mode prototype container —
+# build without a published Pramana distribution. Real deployments install
+# the `pramana` extra (from a private index or the vendored wheel bridge
+# of ADR-0015) and set KAVACH_SDK_BRIDGE_MODE=pramana.
 #
 # All other dependencies use lower-bound minimums with major-version caps
 # to allow patch and minor updates without breaking changes.
 dependencies = [
-    # Foundational substrate (AGPL-3.0; see NOTICE)
-    "aurvia-pramana>=0.3.0,<1.0.0",
-
     # Web framework (substrate operator console + API surface — Block E onward)
     "fastapi>=0.110.0,<0.120.0",
     "uvicorn[standard]>=0.27.0,<0.35.0",
@@ -87,8 +81,16 @@ dependencies = [
 
 # Optional dependency groups.
 #
+# [pramana] is the real identity substrate (AGPL-3.0; see NOTICE), consumed
+# only via its public SDK boundary per ADR-0003/ADR-0015. Not required for
+# the default offline (fake) verifier. During development, scripts/dev-setup.sh
+# installs it editable from ../Pramana-protocol/sdk/python (Pattern B).
+#
 # [dev] is the dev/test toolchain. Installed by scripts/dev-setup.sh.
 [project.optional-dependencies]
+pramana = [
+    "aurvia-pramana>=0.3.0,<1.0.0",
+]
 dev = [
     # Test framework
     "pytest>=8.0.0,<9.0.0",
@@ -205,6 +207,12 @@ omit = [
     "*/tests/*",
     "*/__init__.py",
     "*/conftest.py",
+    # Deployment entrypoints and the partner reference client are exercised
+    # end-to-end by scripts/smoke-onprem.sh against a live server, not by
+    # unit tests; they are thin glue over the substrate the unit suite covers.
+    "kavach/client.py",
+    "kavach/worker.py",
+    "kavach/usecases/customer_service/harness.py",
 ]
 
 [tool.coverage.report]
@@ -282,6 +290,16 @@ line-ending = "lf"
 [tool.ruff.lint.isort]
 known-first-party = ["kavach"]
 known-third-party = ["pramana"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are intended as argument defaults.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+]
 
 # ============================================================================
 # Mypy — strict type checking

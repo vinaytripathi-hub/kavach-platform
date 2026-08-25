@@ -9,14 +9,25 @@ Fixtures defined here are available to ALL tests in the suite.
 See ADR-0006 (Block C) and docs/engineering-handbook.md (Block E) for the
 TDD discipline this conftest supports.
 """
+
 from __future__ import annotations
 
 import os
-from collections.abc import Generator
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from kavach.capabilities.storage import (
+    EventStore,
+    IdempotencyStore,
+    create_all,
+    make_engine,
+    make_session_factory,
+)
+from kavach.composition.bus import EventBus
 
 # ----------------------------------------------------------------------------
 # Repository paths
@@ -65,6 +76,44 @@ def isolate_kavach_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # ----------------------------------------------------------------------------
 # Marker auto-assignment by directory location
 # ----------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------
+# Async database fixtures (in-memory SQLite for fast unit tests)
+# ----------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def engine() -> AsyncIterator[AsyncEngine]:
+    """In-memory SQLite engine with all substrate tables created."""
+    eng = make_engine("sqlite+aiosqlite://")
+    await create_all(eng)
+    try:
+        yield eng
+    finally:
+        await eng.dispose()
+
+
+@pytest.fixture
+def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    """Session factory bound to the test engine."""
+    return make_session_factory(engine)
+
+
+@pytest.fixture
+def event_store() -> EventStore:
+    return EventStore()
+
+
+@pytest.fixture
+def idempotency_store() -> IdempotencyStore:
+    return IdempotencyStore()
+
+
+@pytest.fixture
+def event_bus(event_store: EventStore) -> EventBus:
+    """Event bus with the real store and no projection handlers by default."""
+    return EventBus(store=event_store)
 
 
 def pytest_collection_modifyitems(

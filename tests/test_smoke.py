@@ -130,6 +130,6 @@ def test_pramana_import_resolves() -> None:
 
     # File path resolves to something real.
     assert pramana.__file__ is not None
-    assert Path(
-        pramana.__file__
-    ).is_file(), f"pramana.__file__ ({pramana.__file__}) is not a real file."
+    assert Path(pramana.__file__).is_file(), (
+        f"pramana.__file__ ({pramana.__file__}) is not a real file."
+    )

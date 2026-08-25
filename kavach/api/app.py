@@ -1,0 +1,395 @@
+"""FastAPI application factory (ADR-0016).
+
+``create_app`` builds the application around a pre-wired ``Substrate``.
+The caller is responsible for creating the schema (Alembic on-prem,
+``create_schema`` for tests/demos) before serving traffic.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, Header, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+import kavach
+from kavach.api import models as m
+from kavach.api.security import (
+    AgentPrincipal,
+    OperatorPrincipal,
+    ProblemError,
+    get_substrate,
+    require_agent,
+    require_operator,
+)
+from kavach.capabilities.storage import session_scope
+from kavach.composition import Substrate
+from kavach.events import new_event_id
+from kavach.events.schemas import Evidence
+
+
+def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        if substrate.config.auto_create_schema:
+            await substrate.create_schema()
+        yield
+        await substrate.dispose()
+
+    app = FastAPI(
+        title="Kavach Platform API",
+        version="1.0.0",
+        description="Agent Accountability for Indian BFSI (ADR-0016).",
+        lifespan=lifespan,
+    )
+    app.state.substrate = substrate
+    app.state.audit_exports = {}
+
+    @app.exception_handler(ProblemError)
+    async def _problem_handler(_req: Request, exc: ProblemError) -> JSONResponse:
+        return exc.to_response()
+
+    async def _idempotent(
+        sub: Substrate,
+        tenant: str,
+        key: str | None,
+        success_status: int,
+        produce: Callable[[], Awaitable[BaseModel]],
+    ) -> Response:
+        """Run ``produce`` once per (tenant, key); replay returns the original."""
+        if key:
+            async with session_scope(sub.session_factory) as session:
+                hit = await sub.idempotency_store.get(session, tenant, key)
+            if hit is not None:
+                status, body = hit
+                return JSONResponse(body, status_code=status)
+        result = await produce()
+        body = result.model_dump(mode="json")
+        if key:
+            async with session_scope(sub.session_factory) as session:
+                await sub.idempotency_store.put(session, tenant, key, success_status, body)
+        return JSONResponse(body, status_code=success_status)
+
+    # -- system -------------------------------------------------------------
+
+    @app.get("/v1/health", response_model=m.HealthStatus, tags=["system"])
+    async def health() -> m.HealthStatus:
+        return m.HealthStatus(status="ok", version=kavach.__version__)
+
+    # -- ingress ------------------------------------------------------------
+
+    @app.post("/v1/agents/{agent_id}/actions", tags=["ingress"], status_code=201)
+    async def record_action(
+        agent_id: str,
+        body: m.ActionRecordRequest,
+        request: Request,
+        principal: AgentPrincipal = Depends(require_agent),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> Response:
+        sub = get_substrate(request)
+        _ensure_same_agent(principal, agent_id)
+
+        async def produce() -> m.EventReceipt:
+            event = await sub.service.record_action(
+                tenant_id=principal.tenant_id,
+                agent_id=agent_id,
+                session_id=body.session_id,
+                action_type=body.action_type,
+                parameters=body.parameters,
+                context=body.context,
+            )
+            return m.EventReceipt(
+                event_id=event.event_id,
+                event_type=event.event_type,
+                schema_version=event.schema_version,
+                recorded_at=event.occurred_at,
+            )
+
+        return await _idempotent(sub, principal.tenant_id, idempotency_key, 201, produce)
+
+    # -- decisions ----------------------------------------------------------
+
+    @app.post("/v1/agents/{agent_id}/decisions", tags=["decisions"])
+    async def request_decision(
+        agent_id: str,
+        body: m.DecisionRequest,
+        request: Request,
+        principal: AgentPrincipal = Depends(require_agent),
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ) -> Response:
+        sub = get_substrate(request)
+        _ensure_same_agent(principal, agent_id)
+
+        async def produce() -> m.DecisionResponse:
+            try:
+                decision = await sub.service.decide(
+                    use_case=body.use_case,
+                    tenant_id=principal.tenant_id,
+                    agent_id=agent_id,
+                    session_id=body.session_id,
+                    action_type=body.action_type,
+                    parameters=body.parameters,
+                    context=body.context,
+                )
+            except KeyError as exc:
+                raise ProblemError(422, "validation_error", "Unknown use case.", str(exc)) from exc
+            # Emit a trust assessment off the verified credential so the
+            # console's trust view reflects the agent (ADR-0014).
+            await sub.service.assess_trust(
+                tenant_id=principal.tenant_id,
+                agent_id=agent_id,
+                context=body.use_case,
+                agent=principal.verified,
+            )
+            ev = decision.decision_event
+            step_up = None
+            if decision.step_up_event is not None:
+                step_up = m.StepUpInfo(
+                    reason=decision.step_up_event.reason,
+                    required_role=decision.step_up_event.required_role,
+                )
+            return m.DecisionResponse(
+                decision_id=decision.decision_id,
+                outcome=decision.outcome,
+                rule_id=decision.matched_rule_id,
+                evidence=ev.evidence,
+                reasoning=ev.reasoning,
+                confidence=ev.confidence,
+                data_sufficiency=ev.data_sufficiency,
+                decided_by=ev.decided_by,
+                step_up=step_up,
+            )
+
+        return await _idempotent(sub, principal.tenant_id, idempotency_key, 200, produce)
+
+    @app.post("/v1/decisions/{decision_id}/step-up/resolve", tags=["decisions"])
+    async def resolve_step_up(
+        decision_id: str,
+        body: m.StepUpResolveRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.DecisionResponse:
+        sub = get_substrate(request)
+        try:
+            resolved = await sub.service.resolve_step_up(
+                tenant_id=principal.tenant_id,
+                decision_id=decision_id,
+                resolution=body.resolution,
+                operator_id=body.operator_id,
+                rationale=body.rationale,
+            )
+        except KeyError as exc:
+            raise ProblemError(404, "not_found", "Step-up not found.", str(exc)) from exc
+        except ValueError as exc:
+            raise ProblemError(
+                409, "step_up_already_resolved", "Step-up already resolved.", str(exc)
+            ) from exc
+        from kavach.events.decision_helpers import human_reasoning
+        from kavach.events.schemas import rule_deterministic
+
+        return m.DecisionResponse(
+            decision_id=decision_id,
+            outcome=resolved.final_outcome,
+            evidence=_empty_evidence(),
+            reasoning=human_reasoning(
+                f"Operator {resolved.operator_id} {resolved.resolution}d the step-up."
+            ),
+            confidence=rule_deterministic(),
+            decided_by=f"operator:{resolved.operator_id}",
+        )
+
+    @app.get("/v1/step-ups", tags=["decisions"])
+    async def list_step_ups(
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.StepUpQueuePage:
+        sub = get_substrate(request)
+        rows = await sub.service.pending_step_ups(tenant_id=principal.tenant_id)
+        return m.StepUpQueuePage(
+            items=[
+                m.StepUpQueueItem(
+                    decision_id=r.decision_id,
+                    agent_id=r.agent_id,
+                    action_type=r.action_type,
+                    reason=r.reason,
+                    required_role=r.required_role,
+                    status=r.status,
+                    requested_at=r.requested_at,
+                )
+                for r in rows
+            ]
+        )
+
+    # -- trust + timeline ---------------------------------------------------
+
+    @app.get("/v1/agents/{agent_id}/trust", tags=["trust"])
+    async def get_trust(
+        agent_id: str,
+        request: Request,
+        context: str = "customer_service",
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.TrustResponse:
+        sub = get_substrate(request)
+        row = await sub.service.get_trust(
+            tenant_id=principal.tenant_id, agent_id=agent_id, context=context
+        )
+        if row is None:
+            raise ProblemError(404, "not_found", "No trust assessment for agent.")
+        return m.TrustResponse(
+            agent_id=row.agent_id,
+            context=row.context,
+            dimensions=row.dimensions,
+            composed_scalar=row.composed_scalar,
+            assessed_at=row.assessed_at,
+        )
+
+    @app.get("/v1/agents/{agent_id}/timeline", tags=["trust"])
+    async def get_timeline(
+        agent_id: str,
+        request: Request,
+        limit: int = 50,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.TimelinePage:
+        sub = get_substrate(request)
+        rows = await sub.service.get_timeline(
+            tenant_id=principal.tenant_id, agent_id=agent_id, limit=limit
+        )
+        items = [
+            m.TimelineEntry(
+                event_id=r.event_id,
+                event_type=r.event_type,
+                occurred_at=r.occurred_at,
+                summary=r.summary,
+                outcome=r.outcome,
+            )
+            for r in rows
+        ]
+        return m.TimelinePage(items=items)
+
+    # -- audit export -------------------------------------------------------
+
+    @app.post("/v1/audit/exports", tags=["audit"], status_code=202)
+    async def request_audit_export(
+        body: m.AuditExportRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.AuditExportStatus:
+        sub = get_substrate(request)
+        export = await sub.service.export_audit(
+            tenant_id=principal.tenant_id,
+            agent_id=body.agent_id,
+            frm=body.frm,
+            to=body.to,
+        )
+        export_id = new_event_id()
+        status = m.AuditExportStatus(
+            export_id=export_id,
+            status="ready",
+            record_count=export.record_count,
+            chain_head=(
+                export.signature_manifest.chain_head if export.signature_manifest else None
+            ),
+            signature_manifest=export.signature_manifest,
+            records=export.records,
+        )
+        request.app.state.audit_exports[export_id] = status
+        return status
+
+    @app.get("/v1/audit/exports/{export_id}", tags=["audit"])
+    async def get_audit_export(
+        export_id: str,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.AuditExportStatus:
+        del principal
+        status: m.AuditExportStatus | None = request.app.state.audit_exports.get(export_id)
+        if status is None:
+            raise ProblemError(404, "not_found", "Export not found.")
+        return status
+
+    # -- webhooks + admin ---------------------------------------------------
+
+    @app.post("/v1/webhooks/subscriptions", tags=["webhooks"], status_code=201)
+    async def create_subscription(
+        body: m.WebhookSubscriptionRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.WebhookSubscription:
+        sub = get_substrate(request)
+        row = await sub.service.create_webhook_subscription(
+            tenant_id=principal.tenant_id,
+            url=body.url,
+            event_types=body.event_types,
+            secret=body.secret,
+        )
+        return m.WebhookSubscription(
+            subscription_id=row.subscription_id,
+            url=row.url,
+            event_types=row.event_types,
+            active=row.active,
+            created_at=row.created_at,
+        )
+
+    @app.post("/v1/admin/agents", tags=["admin"], status_code=201)
+    async def register_agent(
+        body: m.AgentRegistrationRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.AgentRegistration:
+        sub = get_substrate(request)
+        row = await sub.service.register_agent(
+            tenant_id=principal.tenant_id,
+            agent_id=body.agent_id,
+            display_name=body.display_name,
+            use_case=body.use_case,
+            metadata=body.metadata,
+        )
+        return m.AgentRegistration(
+            agent_id=row.agent_id,
+            display_name=row.display_name,
+            use_case=row.use_case,
+            registered_at=row.registered_at,
+        )
+
+    @app.post("/v1/admin/policies", tags=["admin"], status_code=201)
+    async def upload_policy(
+        body: m.PolicyUploadRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.PolicyUploadResult:
+        del principal
+        from kavach.capabilities.policy import PolicyRuleSet
+
+        sub = get_substrate(request)
+        rule_set = PolicyRuleSet(
+            use_case=body.use_case,
+            version=body.version,
+            default_effect=body.default_effect,  # type: ignore[arg-type]
+            default_step_up_role=body.default_step_up_role,
+            rules=body.rules,
+        )
+        count = sub.service.upload_policy(rule_set)
+        return m.PolicyUploadResult(
+            use_case=body.use_case,
+            version=body.version,
+            rule_count=count,
+            accepted_at=sub.service.now,
+        )
+
+    return app
+
+
+def _ensure_same_agent(principal: AgentPrincipal, agent_id: str) -> None:
+    if principal.agent_id != agent_id:
+        raise ProblemError(
+            403,
+            "forbidden",
+            "Credential does not authorize acting as this agent.",
+            f"Token agent '{principal.agent_id}' != path agent '{agent_id}'.",
+        )
+
+
+def _empty_evidence() -> Evidence:
+    return Evidence(attributes={})

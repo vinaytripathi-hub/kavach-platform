@@ -16,4 +16,5 @@ Package layout (target; populated across W01-S02 through W01-S0N):
 
 See docs/adr/ for the foundational architectural decisions.
 """
+
 __version__ = "0.0.1"
