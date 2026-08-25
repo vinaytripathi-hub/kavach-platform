@@ -1,0 +1,66 @@
+# Kavach Platform — single-host on-prem stack (ADR-0017).
+#
+# Brings up Postgres 16, the API, the outbox/webhook worker, and the
+# operator console. Configuration comes from .env (copy .env.example).
+# After `docker compose up -d`, run migrations once:
+#   docker compose run --rm api alembic upgrade head
+# then drive the demo:
+#   ./scripts/smoke-onprem.sh
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kavach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kavach}
+      POSTGRES_DB: ${POSTGRES_DB:-kavach}
+    volumes:
+      - kavach_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kavach}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      KAVACH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kavach}:${POSTGRES_PASSWORD:-kavach}@db:5432/${POSTGRES_DB:-kavach}
+      KAVACH_AUDIT_HMAC_KEY: ${KAVACH_AUDIT_HMAC_KEY:?set a strong audit key}
+      KAVACH_JWT_SECRET: ${KAVACH_JWT_SECRET:?set a strong jwt secret}
+      KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
+      KAVACH_SDK_BRIDGE_MODE: ${KAVACH_SDK_BRIDGE_MODE:-fake}
+      KAVACH_EXPECTED_AUDIENCE: ${KAVACH_EXPECTED_AUDIENCE:-kavach}
+      KAVACH_AUTO_CREATE_SCHEMA: ${KAVACH_AUTO_CREATE_SCHEMA:-false}
+    command: ["uvicorn", "kavach.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  worker:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      KAVACH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kavach}:${POSTGRES_PASSWORD:-kavach}@db:5432/${POSTGRES_DB:-kavach}
+      KAVACH_AUDIT_HMAC_KEY: ${KAVACH_AUDIT_HMAC_KEY:?set a strong audit key}
+      KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
+      KAVACH_AUTO_CREATE_SCHEMA: "false"
+    command: ["python", "-m", "kavach.worker"]
+
+  console:
+    image: nginx:1.27-alpine
+    depends_on:
+      - api
+    volumes:
+      - ./kavach/experiences/operator_console:/usr/share/nginx/html:ro
+    ports:
+      - "${CONSOLE_PORT:-8080}:80"
+
+volumes:
+  kavach_pgdata:
