@@ -70,14 +70,16 @@ metadata is updated but its file remains and its number is preserved.
 | 0015 | Accepted | Pramana SDK packaging and AGPL posture for on-prem distribution |
 | 0016 | Accepted | External API surface, contract, and versioning |
 | 0017 | Accepted | On-prem deployment posture (Docker Compose first) |
+| 0018 | Proposed | Signed mandates and policy integration (NIST tenet 06) |
 
 ADRs 0001–0014 cover the foundational and advanced architectural
 commitments for Kavach Platform's substrate and product positioning,
 produced in W01-S02 across Blocks C and D. ADRs 0015–0017 were added
 in the W01-S03+ working-prototype build: Pramana SDK packaging, the
-external HTTP API contract, and the on-prem deployment posture.
-Subsequent ADRs (0018 and beyond) will be added as new architectural
-decisions arise.
+external HTTP API contract, and the on-prem deployment posture. ADR
+0018 addresses NIST agentic-IAM design tenet 06 (signed mandates),
+which is not yet implemented in the substrate. Subsequent ADRs will
+be added as new architectural decisions arise.
 
 ## Adding a new ADR
 
