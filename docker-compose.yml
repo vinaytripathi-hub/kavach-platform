@@ -55,6 +55,10 @@ services:
       KAVACH_AUTO_CREATE_SCHEMA: "false"
     command: ["python", "-m", "kavach.worker"]
 
+  # MCP server over streamable-http (official MCP SDK). Networked agents
+  # (Claude Desktop, Cursor, OpenAI/Anthropic SDKs) connect at
+  # http://localhost:${MCP_PORT}/mcp. For a local stdio client instead, run
+  # `python -m kavach.experiences.mcp_server --transport stdio`.
   mcp:
     build: .
     depends_on:
@@ -63,9 +67,18 @@ services:
       KAVACH_API_URL: http://api:8000
       KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
       KAVACH_AGENT_TOKEN: ${KAVACH_AGENT_TOKEN:-agent:agent-cs-01:kyc,account.funds,complaint}
-    command: ["python", "-m", "kavach.experiences.mcp_server", "--transport", "stdio"]
-    stdin_open: true
-    tty: true
+    command:
+      - python
+      - -m
+      - kavach.experiences.mcp_server
+      - --transport
+      - streamable-http
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8900"
+    ports:
+      - "${MCP_PORT:-8900}:8900"
 
   console:
     image: nginx:1.27-alpine

@@ -39,7 +39,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[dev,ap2,mcp]"
 
       - name: Ruff (lint)
         run: |
@@ -78,7 +78,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[dev,ap2,mcp]"
 
       - name: Run unit tests with coverage
         run: |
@@ -133,7 +133,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[dev,ap2,mcp]"
 
       - name: Run integration tests
         env:

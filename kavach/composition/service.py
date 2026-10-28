@@ -52,6 +52,29 @@ from kavach.query.projections._tables import (
 )
 
 
+def _issue_ap2_stand_in(mandate: Mandate, key: bytes) -> str:
+    """HS256 stand-in used when the AP2 SDK extra is not installed."""
+    amount = 0
+    for bound in mandate.constraints:
+        if bound.path == "payment_amount.amount" and isinstance(bound.value, int):
+            amount = bound.value
+    return issue_ap2_mandate(
+        {
+            "mandate_id": mandate.mandate_id,
+            "agent_id": mandate.agent_id,
+            "originator_id": mandate.originator_id,
+            "action_scope": list(mandate.action_scope),
+            "payment_amount": {"currency": "INR", "amount": amount},
+            "checkout_jwt": mandate.nonce,
+            "constraints": [{"type": "amount_range", "max": amount}],
+            "iat": int(mandate.issued_at.timestamp()),
+            "exp": int(mandate.expires_at.timestamp()),
+            "nonce": mandate.nonce,
+        },
+        key,
+    )
+
+
 def _credential_integrity_dimension(agent: VerifiedAgent) -> TrustDimension:
     """First trust dimension (ADR-0014): credential integrity, cold-start.
 
@@ -174,25 +197,10 @@ class SubstrateService:
         if self._mandate_verifier is None:
             raise RuntimeError("Mandate verifier is not configured.")
         if isinstance(self._mandate_verifier, AP2MandateVerifier):
-            amount = 0
-            for bound in mandate.constraints:
-                if bound.path == "payment_amount.amount" and isinstance(bound.value, int):
-                    amount = bound.value
-            token = issue_ap2_mandate(
-                {
-                    "mandate_id": mandate.mandate_id,
-                    "agent_id": mandate.agent_id,
-                    "originator_id": mandate.originator_id,
-                    "action_scope": list(mandate.action_scope),
-                    "payment_amount": {"currency": "INR", "amount": amount},
-                    "checkout_jwt": mandate.nonce,
-                    "constraints": [{"type": "amount_range", "max": amount}],
-                    "iat": int(mandate.issued_at.timestamp()),
-                    "exp": int(mandate.expires_at.timestamp()),
-                    "nonce": mandate.nonce,
-                },
-                self._mandate_key,
-            )
+            try:
+                token = self._mandate_verifier.issue_chain(mandate)
+            except ImportError:
+                token = _issue_ap2_stand_in(mandate, self._mandate_key)
         else:
             token = issue_fake_mandate(mandate, self._mandate_key)
         event = MandateIssued(

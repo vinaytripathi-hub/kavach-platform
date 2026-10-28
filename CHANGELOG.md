@@ -12,14 +12,23 @@ once the first stable release lands.
 
 - **ADR-0018 (Accepted)** — signed mandates as a substrate capability.
   `POST /v1/mandates`, presentation on `X-Kavach-Mandate`, revocation,
-  and per-rule `mandate_required`. Fake HMAC and AP2 payment-mandate
-  verifiers. Customer-service transfers require a mandate.
+  and per-rule `mandate_required`. Fake HMAC verifier, plus an AP2
+  verifier that checks a Google AP2 SDK SD-JWT payment chain when the
+  `ap2` extra is installed (HS256 stand-in otherwise). Customer-service
+  transfers require a mandate.
 - **ADR-0019 (Accepted)** — monitor capability with rate, outcome-drift,
   scope-expansion, and confidence-drop detectors. Open anomaly severity
   is a policy input. Operator console anomalies view.
 - **Signer protocol** on the audit chain (`HMACSigner`, `KmsSignerStub`).
 - **MCP server** (`python -m kavach.experiences.mcp_server`) exposing
-  decide, mandate, step-up, trust, and timeline tools.
+  decide, mandate, step-up, trust, and timeline tools. The server is built
+  on the official MCP SDK and speaks both `stdio` and `streamable-http`;
+  conformance is tested with the official MCP client over in-memory and
+  HTTP transports.
+- **Audit `Signer`** is now byte-oriented (`sign(bytes) -> bytes`,
+  `verify(bytes, bytes) -> bool`, `key_id`), so an HSM or KMS adapter can
+  return raw signature bytes. The HMAC chain stores the hex form and
+  verifies bit-for-bit as before.
 - **Swarm scorecard** runner at `kavach/testing/swarm.py`.
 
 ### Added — W01-S03 Working Prototype

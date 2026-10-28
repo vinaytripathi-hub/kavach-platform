@@ -32,9 +32,19 @@ RUN useradd --create-home --uid 10001 kavach
 
 WORKDIR /app
 
-# Install the Kavach wheel (core dependencies only; fake verifier default).
+# Install the Kavach wheel and the pinned AP2 SDK so
+# KAVACH_MANDATE_VERIFIER_MODE=ap2 verifies a real SD-JWT chain.
+# git is only needed to fetch that commit, then removed.
 COPY --from=builder /dist/*.whl /tmp/
-RUN pip install /tmp/*.whl && rm -f /tmp/*.whl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && pip install /tmp/*.whl \
+      "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43" \
+      "mcp>=2.3.0,<3.0.0" \
+    && rm -f /tmp/*.whl \
+    && apt-get purge -y git \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # To enable the real Pramana SDK (ADR-0015 vendored-wheel bridge):
 #   COPY vendor/aurvia_pramana-*.whl /tmp/

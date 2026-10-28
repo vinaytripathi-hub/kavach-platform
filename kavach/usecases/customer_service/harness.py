@@ -77,6 +77,7 @@ def run_demo_flow(
             }
         )
         summary["mandate_id"] = issued["mandate_id"]
+        summary["mandate_token"] = issued["token"]
         summary["steps"].append("issued mandate")
 
         # 5. High-value transfer within the mandate -> step_up.

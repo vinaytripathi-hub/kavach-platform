@@ -13,13 +13,18 @@ from typing import Protocol
 
 
 class Signer(Protocol):
-    """Signs and verifies the canonical link string of an audit record."""
+    """Signs and verifies raw bytes of an audit record's link material.
+
+    The byte boundary keeps the contract agnostic of the digest encoding a
+    key store returns (an HSM or KMS returns raw signature bytes), while the
+    chain stores the hex form.
+    """
 
     key_id: str
 
-    def sign(self, message: str) -> str: ...
+    def sign(self, message: bytes) -> bytes: ...
 
-    def verify(self, message: str, signature: str) -> bool: ...
+    def verify(self, message: bytes, signature: bytes) -> bool: ...
 
 
 class HMACSigner:
@@ -30,12 +35,11 @@ class HMACSigner:
         digest = hashlib.sha256(b"kavach-audit-keyid:" + key).hexdigest()
         self.key_id = key_id or digest[:16]
 
-    def sign(self, message: str) -> str:
-        return hmac.new(self._key, message.encode("utf-8"), hashlib.sha256).hexdigest()
+    def sign(self, message: bytes) -> bytes:
+        return hmac.new(self._key, message, hashlib.sha256).digest()
 
-    def verify(self, message: str, signature: str) -> bool:
-        expected = self.sign(message)
-        return hmac.compare_digest(expected, signature)
+    def verify(self, message: bytes, signature: bytes) -> bool:
+        return hmac.compare_digest(self.sign(message), signature)
 
 
 class KmsSignerStub:
@@ -44,11 +48,11 @@ class KmsSignerStub:
     def __init__(self, *, key_id: str = "kms-unconfigured") -> None:
         self.key_id = key_id
 
-    def sign(self, message: str) -> str:
+    def sign(self, message: bytes) -> bytes:
         del message
         raise RuntimeError(f"KMS signer '{self.key_id}' is not configured.")
 
-    def verify(self, message: str, signature: str) -> bool:
+    def verify(self, message: bytes, signature: bytes) -> bool:
         del message, signature
         return False
 

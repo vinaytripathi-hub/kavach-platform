@@ -43,7 +43,7 @@ class AuditChainWriter:
 
         digest = payload_digest(event.payload())
         message = link_message(prev_hash, position, event.event_id, digest)
-        this_hash = self._signer.sign(message)
+        this_hash = self._signer.sign(message.encode("utf-8")).hex()
         session.add(
             AuditRecordRow(
                 tenant_id=event.tenant_id,

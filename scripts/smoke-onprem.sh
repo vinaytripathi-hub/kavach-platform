@@ -20,6 +20,7 @@ echo "  tenant: ${TENANT}"
 echo
 
 python - "$API_URL" "$OPERATOR_TOKEN" "$TENANT" <<'PY'
+import os
 import sys
 from kavach.usecases.customer_service.harness import run_demo_flow
 
@@ -32,6 +33,8 @@ assert summary["resolved_outcome"] == "allow", summary
 assert summary["audit_record_count"] >= 4, summary
 assert summary["audit_signed"] is True, summary
 assert summary.get("mandate_digest"), summary
+if os.environ.get("KAVACH_MANDATE_VERIFIER_MODE") == "ap2":
+    assert "~~" in str(summary.get("mandate_token", "")), "expected an AP2 SD-JWT chain"
 
 print("  KYC decision .............. {}".format(summary["kyc_outcome"]))
 print("  High-value transfer ....... {}".format(summary["transfer_outcome"]))

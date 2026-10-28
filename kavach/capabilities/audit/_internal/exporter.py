@@ -102,7 +102,7 @@ class AuditExporter:
             manifest = SignatureManifest(
                 key_id=self._signer.key_id,
                 chain_head=chain_head,
-                signature=self._signer.sign(chain_head),
+                signature=self._signer.sign(chain_head.encode("utf-8")).hex(),
             )
         return AuditExport(
             tenant_id=tenant_id,
@@ -117,14 +117,18 @@ class AuditExporter:
         if not export.records:
             return export.signature_manifest is None
         for rec in export.records:
-            expected = self._signer.sign(
-                link_message(rec.prev_hash, rec.position, rec.event_id, rec.payload_digest)
-            )
-            if expected != rec.this_hash:
+            message = link_message(
+                rec.prev_hash, rec.position, rec.event_id, rec.payload_digest
+            ).encode("utf-8")
+            if self._signer.sign(message).hex() != rec.this_hash:
                 return False
         manifest = export.signature_manifest
         if manifest is None:
             return False
         if manifest.chain_head != export.records[-1].this_hash:
             return False
-        return self._signer.verify(manifest.chain_head, manifest.signature)
+        try:
+            signature = bytes.fromhex(manifest.signature)
+        except ValueError:
+            return False
+        return self._signer.verify(manifest.chain_head.encode("utf-8"), signature)
