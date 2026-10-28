@@ -103,6 +103,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/AgentId"
         - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/MandateToken"
       requestBody:
         required: true
         content:
@@ -327,6 +328,98 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
+  /mandates:
+    post:
+      tags: [mandates]
+      summary: Issue a signed mandate
+      operationId: issueMandate
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mandate_id, originator_id, originator_kind, agent_id, action_scope, expires_at, nonce]
+              properties:
+                mandate_id: { type: string }
+                originator_id: { type: string }
+                originator_kind: { type: string, enum: [human, service, agent, wallet] }
+                agent_id: { type: string }
+                action_scope: { type: array, items: { type: string } }
+                constraints:
+                  type: array
+                  items:
+                    type: object
+                    required: [path, operator]
+                    properties:
+                      path: { type: string }
+                      operator: { type: string }
+                      value: {}
+                expires_at: { type: string, format: date-time }
+                parent_mandate_id: { type: string, nullable: true }
+                nonce: { type: string }
+      responses:
+        "201":
+          description: Mandate issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mandate_id: { type: string }
+                  token: { type: string }
+                  mandate_digest: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /mandates/{mandate_id}:
+    get:
+      tags: [mandates]
+      summary: Read a stored mandate
+      operationId: getMandate
+      parameters:
+        - name: mandate_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Mandate
+          content:
+            application/json:
+              schema:
+                type: object
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /mandates/{mandate_id}/revoke:
+    post:
+      tags: [mandates]
+      summary: Revoke a mandate before expiry
+      operationId: revokeMandate
+      parameters:
+        - name: mandate_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revoked_by]
+              properties:
+                revoked_by: { type: string }
+                reason: { type: string }
+      responses:
+        "200":
+          description: Mandate revoked
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Mandate already revoked
+
 components:
   securitySchemes:
     bearerAuth:
@@ -349,6 +442,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    MandateToken:
+      name: X-Kavach-Mandate
+      in: header
+      required: false
+      schema: { type: string }
+      description: Signed mandate presented with a decision request (ADR-0018)
     IdempotencyKey:
       name: Idempotency-Key
       in: header

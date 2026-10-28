@@ -31,6 +31,7 @@ assert summary["transfer_outcome"] == "step_up", summary
 assert summary["resolved_outcome"] == "allow", summary
 assert summary["audit_record_count"] >= 4, summary
 assert summary["audit_signed"] is True, summary
+assert summary.get("mandate_digest"), summary
 
 print("  KYC decision .............. {}".format(summary["kyc_outcome"]))
 print("  High-value transfer ....... {}".format(summary["transfer_outcome"]))

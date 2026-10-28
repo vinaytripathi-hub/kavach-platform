@@ -8,6 +8,20 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Added — Signed mandates, AP2 verification, and monitoring
+
+- **ADR-0018 (Accepted)** — signed mandates as a substrate capability.
+  `POST /v1/mandates`, presentation on `X-Kavach-Mandate`, revocation,
+  and per-rule `mandate_required`. Fake HMAC and AP2 payment-mandate
+  verifiers. Customer-service transfers require a mandate.
+- **ADR-0019 (Accepted)** — monitor capability with rate, outcome-drift,
+  scope-expansion, and confidence-drop detectors. Open anomaly severity
+  is a policy input. Operator console anomalies view.
+- **Signer protocol** on the audit chain (`HMACSigner`, `KmsSignerStub`).
+- **MCP server** (`python -m kavach.experiences.mcp_server`) exposing
+  decide, mandate, step-up, trust, and timeline tools.
+- **Swarm scorecard** runner at `kavach/testing/swarm.py`.
+
 ### Added — W01-S03 Working Prototype
 
 - **ADRs 0015–0017** — Pramana SDK packaging and AGPL posture (Protocol-

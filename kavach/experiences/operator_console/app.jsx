@@ -273,8 +273,37 @@ function Evidence({ cfg }) {
 // Shell
 // ---------------------------------------------------------------------------
 
+function Anomalies({ cfg }) {
+  const [agent, setAgent] = useState("agent-cs-01");
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const d = await api(cfg, "GET", `/v1/agents/${encodeURIComponent(agent)}/anomalies`);
+      setData(d);
+    } catch (e) {
+      setError(e.message);
+      setData(null);
+    }
+  }, [cfg, agent]);
+  return (
+    <div className="card">
+      <h2>Anomalies</h2>
+      <p className="sub">Highest open anomaly severity for an agent. Policy reads this label.</p>
+      <div className="row">
+        <input value={agent} onChange={(e) => setAgent(e.target.value)} placeholder="agent id" />
+        <button className="primary" onClick={load}>Load</button>
+      </div>
+      <ErrorLine error={error} />
+      {data ? <p>Severity: <Badge kind={data.severity}>{data.severity}</Badge></p> : null}
+    </div>
+  );
+}
+
 const TABS = [
   { id: "timeline", label: "Timeline", render: (cfg) => <Timeline cfg={cfg} /> },
+  { id: "anomalies", label: "Anomalies", render: (cfg) => <Anomalies cfg={cfg} /> },
   { id: "trust", label: "Trust", render: (cfg) => <Trust cfg={cfg} /> },
   { id: "stepups", label: "Step-up queue", render: (cfg) => <StepUps cfg={cfg} /> },
   { id: "evidence", label: "Evidence export", render: (cfg) => <Evidence cfg={cfg} /> },

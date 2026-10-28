@@ -91,6 +91,11 @@ dependencies = [
 pramana = [
     "aurvia-pramana>=0.3.0,<1.0.0",
 ]
+# AP2 verification in this repo is self-contained (HS256 over the AP2
+# payment-mandate claim set). The upstream Google package is not on PyPI;
+# deployments that want the upstream types install it from git. The extra
+# exists so that mode is an explicit install target.
+ap2 = []
 dev = [
     # Test framework
     "pytest>=8.0.0,<9.0.0",
@@ -207,6 +212,8 @@ omit = [
     "*/tests/*",
     "*/__init__.py",
     "*/conftest.py",
+    "kavach/testing/*",
+    "kavach/experiences/mcp_server/*",
     # Deployment entrypoints and the partner reference client are exercised
     # end-to-end by scripts/smoke-onprem.sh against a live server, not by
     # unit tests; they are thin glue over the substrate the unit suite covers.
@@ -331,6 +338,7 @@ show_error_context = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+disallow_untyped_decorators = false
 
 # Pramana is consumed via its public SDK; until Pramana ships type stubs,
 # allow mypy to be lenient on Pramana-originated types. This will tighten

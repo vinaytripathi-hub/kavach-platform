@@ -1,0 +1,17 @@
+{
+  "vct": "mandate.payment.open.1",
+  "mandate_id": "ap2-m-1",
+  "agent_id": "agent-cs-01",
+  "originator_id": "customer-1",
+  "action_scope": ["account.funds.transfer"],
+  "payee": {"id": "merchant-1", "name": "Merchant"},
+  "payment_amount": {"currency": "INR", "amount": 250000},
+  "checkout_jwt": "checkout-mandate-demo",
+  "constraints": [
+    {"type": "amount_range", "max": 500000},
+    {"type": "allowed_payee", "payees": ["merchant-1"]}
+  ],
+  "iat": 1793001600,
+  "exp": 1893456000,
+  "nonce": "ap2-nonce-1"
+}

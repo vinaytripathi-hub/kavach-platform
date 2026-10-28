@@ -1,6 +1,6 @@
 # ADR-0018 — Signed mandates and policy integration
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-27
 
 ## Context
@@ -276,3 +276,47 @@ to issue a mandate, present it, and resolve the step-up. This is
   `/v1` surface the three new endpoints extend.
 - [ADR-0017](./0017-on-prem-deployment-posture.md) — the migration
   discipline the new tables follow.
+
+## Addendum — 2026-10-27 — FIDO, AP2, and Verifiable Intent alignment
+
+Written before this ADR moves to Accepted. The decision above stands.
+This addendum records industry alignment discovered after the first
+draft and two packaging clarifications the implementation follows.
+
+**1. Industry alignment.** The mandate shape in this ADR matches the
+direction of three independent efforts:
+
+- FIDO Alliance, *Standards for Trusted AI Agent Interactions*
+  (28 April 2026) — Agentic Authentication Technical Working Group
+  and Payments Technical Working Group. Focus areas: verifiable user
+  instructions, agent authentication, trusted delegation for commerce.
+- Google Agent Payments Protocol (AP2) v0.2 (28 April 2026) —
+  `mandate.checkout` and `mandate.payment` SD-JWT credentials, with
+  a constraint vocabulary (`amount_range`, `allowed_payee`,
+  `allowed_payment_instrument`, `budget`, `agent_recurrence`) and a
+  non-agentic Trusted Surface.
+- Mastercard Verifiable Intent v0.1-draft (18 February 2026) —
+  layered SD-JWT (L1 identity, L2 user authorization, L3 agent
+  execution) with normative attenuation: L3 values must satisfy
+  disclosed L2 constraints.
+
+`MandateVerifier` stays the substrate Protocol. Shipping adapters are
+`FakeMandateVerifier` (offline), `AP2MandateVerifier` (Phase 1), and
+later `VIMandateVerifier` / `PramanaMandateVerifier`. Pramana is one
+adapter in the family, not the only cryptographic path.
+`originator_kind` maps onto AP2 roles: `human` via a Trusted Surface,
+`agent` for attenuated sub-mandates, `service` / `wallet` for a
+credential provider.
+
+**2. Constraint vocabulary tracks AP2 / VI.** `MandateConstraint`
+keeps a path / operator / value shape so the policy engine stays
+uniform, but registered paths follow the AP2 / VI names
+(`payment_amount`, `payee`, `payment_instrument`, `budget`) rather
+than a Kavach-only dialect. Unknown constraint types fail closed
+when a rule sets `mandate_required`.
+
+**3. Package boundary.** The mandate capability lives in
+`kavach/capabilities/mandate/`, not inside `sdk_bridge`.
+`sdk_bridge` remains the credential-verifier boundary (ADR-0015).
+`MandateVerifier`, issuance, revocation, and policy integration are
+a separate capability with its own adapters. Composition wires both.

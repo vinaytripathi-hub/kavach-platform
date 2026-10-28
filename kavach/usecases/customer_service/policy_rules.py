@@ -69,13 +69,15 @@ def build_rule_set() -> PolicyRuleSet:
                 ],
                 step_up_role="senior_ops",
                 priority=10,
+                mandate_required=True,
             ),
             PolicyRule(
                 rule_id="allow-low-value-transfer",
-                description="Low-value transfers are permitted automatically.",
+                description="Low-value transfers are permitted when a mandate covers them.",
                 action_type="account.funds.transfer",
                 effect="allow",
                 priority=20,
+                mandate_required=True,
             ),
         ],
     )

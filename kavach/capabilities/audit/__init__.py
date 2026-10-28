@@ -15,6 +15,7 @@ from kavach.capabilities.audit._internal.exporter import (
 )
 from kavach.capabilities.audit._internal.models import AuditRecordRow
 from kavach.capabilities.audit._internal.writer import AuditChainWriter
+from kavach.capabilities.audit.signer import HMACSigner, KmsSignerStub, Signer, make_signer
 
 __all__ = [
     "AuditChainWriter",
@@ -22,5 +23,9 @@ __all__ = [
     "AuditExporter",
     "AuditRecord",
     "AuditRecordRow",
+    "HMACSigner",
+    "KmsSignerStub",
     "SignatureManifest",
+    "Signer",
+    "make_signer",
 ]

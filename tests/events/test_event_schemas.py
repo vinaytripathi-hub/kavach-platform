@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from kavach.events import deserialize_event, known_events, resolve_event
@@ -14,6 +16,9 @@ from kavach.events.schemas import (
     DecisionFeedbackRecorded,
     Evidence,
     EvidenceRecorded,
+    MandateIssued,
+    MandatePresented,
+    MandateRevoked,
     ModalitySufficiency,
     PolicyEvaluated,
     ReasoningTrace,
@@ -34,6 +39,9 @@ ALL_EVENT_CLASSES: list[type[DomainEvent]] = [
     EvidenceRecorded,
     TrustAssessmentEmitted,
     DecisionFeedbackRecorded,
+    MandateIssued,
+    MandatePresented,
+    MandateRevoked,
     StepUpRequested,
     StepUpResolved,
 ]
@@ -89,7 +97,7 @@ class TestEnvelope:
 
 
 class TestRegistry:
-    def test_all_eight_events_registered(self) -> None:
+    def test_registered_events_cover_the_vocabulary(self) -> None:
         registered = set(known_events())
         for cls in ALL_EVENT_CLASSES:
             assert (cls.event_type, cls.schema_version) in registered
@@ -225,6 +233,27 @@ def _sample_for(cls: type[DomainEvent]) -> DomainEvent:  # noqa: PLR0911
             reasoning=ReasoningTrace(kind="human", decision_path="confirmed"),
             confidence=Confidence(kind="human_judged", score=0.8),
         )
+    if cls is MandateIssued:
+        return MandateIssued(
+            tenant_id="t1",
+            mandate_id="m1",
+            originator_id="user",
+            agent_id="a",
+            action_scope=["account.funds.transfer"],
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            mandate_digest="abc",
+        )
+    if cls is MandatePresented:
+        return MandatePresented(
+            tenant_id="t1",
+            agent_id="a",
+            decision_id="d",
+            mandate_id="m1",
+            verified=True,
+            reason="ok",
+        )
+    if cls is MandateRevoked:
+        return MandateRevoked(tenant_id="t1", mandate_id="m1", agent_id="a", revoked_by="op")
     if cls is StepUpRequested:
         return StepUpRequested(
             tenant_id="t1",

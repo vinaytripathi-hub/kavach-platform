@@ -6,7 +6,18 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Operator = Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "contains"]
+Operator = Literal[
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+    "contains",
+    "mandate_covers_action",
+    "mandate_constraint_satisfied",
+]
 Effect = Literal["allow", "deny", "step_up"]
 
 
@@ -32,6 +43,8 @@ class PolicyRule(BaseModel):
     conditions: list[PolicyCondition] = Field(default_factory=list)
     step_up_role: str | None = None
     priority: int = 100
+    mandate_required: bool = False
+    mandate_originator_kinds: list[str] | None = None
 
 
 class PolicyRuleSet(BaseModel):

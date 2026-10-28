@@ -7,9 +7,14 @@ values; on-prem deployments supply real values at deploy time.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from kavach.capabilities.sdk_bridge import VerifierMode
+
+MandateVerifierMode = Literal["fake", "ap2"]
+AuditSignerMode = Literal["hmac", "kms_stub"]
 
 
 class SubstrateConfig(BaseSettings):
@@ -20,6 +25,8 @@ class SubstrateConfig(BaseSettings):
     database_url: str = "sqlite+aiosqlite://"
     audit_hmac_key: str = "dev-insecure-audit-key-change-me"
     sdk_bridge_mode: VerifierMode = "fake"
+    mandate_verifier_mode: MandateVerifierMode = "fake"
+    audit_signer_mode: AuditSignerMode = "hmac"
     jwt_secret: str = "dev-insecure-jwt-secret-change-me"  # noqa: S105
     expected_audience: str = "kavach"
     operator_token: str = "operator-dev-token"  # noqa: S105

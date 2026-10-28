@@ -83,3 +83,33 @@ class StepUpQueueRow(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution: Mapped[str | None] = mapped_column(String(20), nullable=True)
     operator_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class MandateCurrentRow(Base):
+    """Current mandate state for operator lookup (ADR-0018)."""
+
+    __tablename__ = "proj_mandate_current"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    mandate_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(200), index=True)
+    originator_id: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    mandate_digest: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgentAnomalyCurrentRow(Base):
+    """Highest-severity open anomaly per agent (ADR-0019)."""
+
+    __tablename__ = "proj_agent_anomaly_current"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    anomaly_id: Mapped[str] = mapped_column(String(64))
+    detector_id: Mapped[str] = mapped_column(String(100))
+    severity: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    description: Mapped[str] = mapped_column(Text, default="")
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))

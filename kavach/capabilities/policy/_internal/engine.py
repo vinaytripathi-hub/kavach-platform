@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from kavach.capabilities.mandate.contracts import VerifiedMandate
 from kavach.capabilities.policy._internal.rules import (
     PolicyCondition,
     PolicyRule,
@@ -23,6 +24,7 @@ from kavach.events.decision_helpers import make_evidence, rule_reasoning
 from kavach.events.schemas import (
     Confidence,
     DecisionEmitted,
+    EvidenceReference,
     Outcome,
     PolicyEvaluated,
     ReasoningTrace,
@@ -55,7 +57,67 @@ def _resolve(attribute: str, ctx: dict[str, Any]) -> Any:  # noqa: ANN401
     return cur
 
 
+def _resolve_path(path: str, parameters: dict[str, Any]) -> Any:  # noqa: ANN401
+    cur: Any = parameters
+    for part in path.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            return None
+    return cur
+
+
+def _constraint_ok(op: str, actual: Any, expected: Any) -> bool:  # noqa: ANN401
+    if op == "eq":
+        return bool(actual == expected)
+    if op == "ne":
+        return bool(actual != expected)
+    if op == "in":
+        return actual in expected
+    comparators: dict[str, Any] = {
+        "lte": lambda left, right: left <= right,
+        "lt": lambda left, right: left < right,
+        "gte": lambda left, right: left >= right,
+        "gt": lambda left, right: left > right,
+    }
+    fn = comparators.get(op)
+    if fn is None:
+        return False
+    try:
+        return bool(fn(actual, expected))
+    except TypeError:
+        return False
+
+
+def _constraints_hold(mandate: VerifiedMandate, parameters: dict[str, Any]) -> bool:
+    if mandate.mandate is None:
+        return False
+    for bound in mandate.mandate.constraints:
+        actual = _resolve_path(bound.path, parameters)
+        if bound.path.startswith("payment_amount") and actual is None:
+            actual = parameters.get("amount")
+        if bound.path == "payee.id" and actual is None:
+            actual = parameters.get("to")
+        if actual is None or not _constraint_ok(bound.operator, actual, bound.value):
+            return False
+    return True
+
+
+def _mandate_condition(cond: PolicyCondition, ctx: dict[str, Any]) -> bool:
+    mandate = ctx.get("mandate")
+    if not isinstance(mandate, VerifiedMandate) or not mandate.verified:
+        return False
+    if cond.operator == "mandate_covers_action":
+        return True
+    parameters = ctx.get("parameters")
+    if not isinstance(parameters, dict):
+        return False
+    return _constraints_hold(mandate, parameters)
+
+
 def _check(cond: PolicyCondition, ctx: dict[str, Any]) -> bool:  # noqa: PLR0911
+    if cond.operator in ("mandate_covers_action", "mandate_constraint_satisfied"):
+        return _mandate_condition(cond, ctx)
     actual = _resolve(cond.attribute, ctx)
     expected = cond.value
     op = cond.operator
@@ -85,6 +147,26 @@ def _check(cond: PolicyCondition, ctx: dict[str, Any]) -> bool:  # noqa: PLR0911
         return False
 
 
+def _mandate_block(
+    rule: PolicyRule | None,
+    mandate: VerifiedMandate | None,
+    parameters: dict[str, Any],
+) -> str | None:
+    """Return a denial reason when the matched rule requires a mandate."""
+    if rule is None or not rule.mandate_required:
+        return None
+    if mandate is None or mandate.mandate is None or not mandate.verified:
+        return "Action requires a verified mandate and none was presented."
+    kinds = rule.mandate_originator_kinds
+    if kinds is not None and mandate.mandate.originator_kind not in kinds:
+        return (
+            f"Mandate originator kind '{mandate.mandate.originator_kind}' is not in {list(kinds)}."
+        )
+    if not _constraints_hold(mandate, parameters):
+        return "Mandate constraints are not satisfied by the request."
+    return None
+
+
 class PolicyEngine:
     """Evaluates proposed actions against a rule set."""
 
@@ -112,6 +194,8 @@ class PolicyEngine:
         action_type: str,
         parameters: dict[str, Any],
         context: str | None = None,
+        verified_mandate: VerifiedMandate | None = None,
+        anomaly_severity: str | None = None,
     ) -> PolicyDecision:
         decision_id = new_event_id()
         ctx: dict[str, Any] = {
@@ -119,6 +203,8 @@ class PolicyEngine:
             "action_type": action_type,
             "agent_id": agent_id,
             "context": context,
+            "mandate": verified_mandate,
+            "agent": {"anomaly_severity": anomaly_severity or "none"},
         }
         rule = self._match(action_type, ctx)
 
@@ -144,15 +230,35 @@ class PolicyEngine:
             )
             step_up_role = rule.step_up_role or self._rule_set.default_step_up_role
 
+        mandate_block = _mandate_block(rule, verified_mandate, parameters)
+        if mandate_block is not None:
+            outcome = "deny"
+            decided_by = "policy:mandate"
+            reasoning = ReasoningTrace(
+                kind="rule", rule_id=matched_rule_id, decision_path=mandate_block
+            )
+            step_up_role = self._rule_set.default_step_up_role
+
         confidence: Confidence = rule_deterministic()
-        evidence = make_evidence(
-            attributes={
-                "action_type": action_type,
-                "parameters": parameters,
-                "context": context,
-                "matched_rule_id": matched_rule_id,
-            }
-        )
+        attributes: dict[str, Any] = {
+            "action_type": action_type,
+            "parameters": parameters,
+            "context": context,
+            "matched_rule_id": matched_rule_id,
+        }
+        references: list[EvidenceReference] = []
+        if verified_mandate is not None and verified_mandate.mandate is not None:
+            attributes["mandate_originator_id"] = verified_mandate.mandate.originator_id
+            attributes["mandate_originator_kind"] = verified_mandate.mandate.originator_kind
+            attributes["mandate_digest"] = verified_mandate.digest
+            references.append(
+                EvidenceReference(
+                    kind="mandate",
+                    ref_id=verified_mandate.mandate.mandate_id,
+                    digest=verified_mandate.digest or None,
+                )
+            )
+        evidence = make_evidence(attributes=attributes, references=references)
 
         step_up_reason: str | None = None
         step_up_event: StepUpRequested | None = None

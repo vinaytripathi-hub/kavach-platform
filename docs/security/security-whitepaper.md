@@ -27,6 +27,17 @@ Everything runs in the partner's perimeter
   of the API in production; it is a deployment-edge concern, not embedded
   in application code.
 
+## Signed mandates
+
+High-impact actions can require a signed mandate
+([ADR-0018](../adr/0018-signed-mandates-and-policy-integration.md)).
+The presented token is verified outside the agent's reasoning path.
+The decision evidence stores the mandate digest and the originator
+identity, not the raw token. Revocation is checked before the policy
+effect is applied. The audit chain is signed through a `Signer`
+boundary; the shipping signer is HMAC-SHA256, with a KMS stub for
+deployments that will move the key into an HSM.
+
 ## Tamper-evident audit
 
 Every event is written to an append-only log and, in the same

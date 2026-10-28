@@ -93,7 +93,11 @@ class KavachClient:
         use_case: str = "customer_service",
         context: str | None = None,
         idempotency_key: str | None = None,
+        mandate_token: str | None = None,
     ) -> dict[str, Any]:
+        headers = self._headers(idempotency_key)
+        if mandate_token:
+            headers["X-Kavach-Mandate"] = mandate_token
         resp = self._client.post(
             f"/v1/agents/{agent_id}/decisions",
             json={
@@ -103,7 +107,7 @@ class KavachClient:
                 "use_case": use_case,
                 "context": context,
             },
-            headers=self._headers(idempotency_key),
+            headers=headers,
         )
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
@@ -184,6 +188,30 @@ class KavachClient:
                 "use_case": use_case,
                 "metadata": metadata or {},
             },
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return data
+
+    def issue_mandate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = self._client.post("/v1/mandates", json=payload, headers=self._headers())
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return data
+
+    def get_mandate(self, mandate_id: str) -> dict[str, Any]:
+        resp = self._client.get(f"/v1/mandates/{mandate_id}", headers=self._headers())
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        return data
+
+    def revoke_mandate(
+        self, mandate_id: str, *, revoked_by: str, reason: str = ""
+    ) -> dict[str, Any]:
+        resp = self._client.post(
+            f"/v1/mandates/{mandate_id}/revoke",
+            json={"revoked_by": revoked_by, "reason": reason},
             headers=self._headers(),
         )
         resp.raise_for_status()

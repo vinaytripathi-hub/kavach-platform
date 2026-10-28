@@ -1,6 +1,6 @@
 # ADR-0019 — Monitor capability and anomaly feedback loop
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-27
 
 ## Context

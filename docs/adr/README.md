@@ -70,8 +70,8 @@ metadata is updated but its file remains and its number is preserved.
 | 0015 | Accepted | Pramana SDK packaging and AGPL posture for on-prem distribution |
 | 0016 | Accepted | External API surface, contract, and versioning |
 | 0017 | Accepted | On-prem deployment posture (Docker Compose first) |
-| 0018 | Proposed | Signed mandates and policy integration (NIST tenet 06) |
-| 0019 | Proposed | Monitor capability and anomaly feedback loop (NIST tenet 09) |
+| 0018 | Accepted | Signed mandates and policy integration (NIST tenet 06) |
+| 0019 | Accepted | Monitor capability and anomaly feedback loop (NIST tenet 09) |
 
 ADRs 0001–0014 cover the foundational and advanced architectural
 commitments for Kavach Platform's substrate and product positioning,

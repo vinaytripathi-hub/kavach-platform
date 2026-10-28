@@ -12,7 +12,15 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from kavach.capabilities.audit import AuditChainWriter, AuditExporter
+from kavach.capabilities.audit import AuditChainWriter, AuditExporter, make_signer
+from kavach.capabilities.mandate import make_mandate_verifier
+from kavach.capabilities.monitor import (
+    ConfidenceDropDetector,
+    OutcomeDriftDetector,
+    RateDetector,
+    ScopeExpansionDetector,
+)
+from kavach.capabilities.monitor._internal.handler import MonitorHandler
 from kavach.capabilities.policy import PolicyEngine, PolicyRuleProvider
 from kavach.capabilities.sdk_bridge import CredentialVerifier, make_verifier
 from kavach.capabilities.storage import (
@@ -25,9 +33,11 @@ from kavach.capabilities.storage import (
 from kavach.composition.bus import EventBus, ProjectionHandler
 from kavach.composition.config import SubstrateConfig
 from kavach.composition.service import SubstrateService
+from kavach.query.projections.agent_anomaly_current import AgentAnomalyCurrentProjection
 from kavach.query.projections.agent_timeline import AgentTimelineProjection
 from kavach.query.projections.agent_trust_current import AgentTrustCurrentProjection
 from kavach.query.projections.decision_log import DecisionLogProjection
+from kavach.query.projections.mandate_current import MandateCurrentProjection
 from kavach.query.projections.step_up_queue import StepUpQueueProjection
 
 
@@ -68,23 +78,39 @@ def build_substrate(
 
     event_store = EventStore()
     idempotency_store = IdempotencyStore()
-    audit_writer = AuditChainWriter(config.audit_key_bytes)
-    audit_exporter = AuditExporter(config.audit_key_bytes)
+    signer = make_signer(config.audit_signer_mode, config.audit_key_bytes)
+    audit_writer = AuditChainWriter(signer)
+    audit_exporter = AuditExporter(signer)
 
     projections: list[ProjectionHandler] = [
         AgentTimelineProjection(),
         AgentTrustCurrentProjection(),
         DecisionLogProjection(),
         StepUpQueueProjection(),
+        MandateCurrentProjection(),
+        AgentAnomalyCurrentProjection(),
     ]
     handlers: list[ProjectionHandler] = [audit_writer, *projections]
     bus = EventBus(store=event_store, handlers=handlers)
+    bus.register(
+        MonitorHandler(
+            event_store,
+            bus,
+            [
+                RateDetector(),
+                OutcomeDriftDetector(),
+                ScopeExpansionDetector(),
+                ConfidenceDropDetector(),
+            ],
+        )
+    )
 
     policy_engines = {
         provider.use_case: PolicyEngine(provider.rule_set()) for provider in rule_providers
     }
 
     verifier = make_verifier(config.sdk_bridge_mode)
+    mandate_verifier = make_mandate_verifier(config.mandate_verifier_mode, config.audit_key_bytes)
 
     service = SubstrateService(
         session_factory=session_factory,
@@ -92,6 +118,8 @@ def build_substrate(
         event_store=event_store,
         audit_exporter=audit_exporter,
         policy_engines=policy_engines,
+        mandate_verifier=mandate_verifier,
+        mandate_key=config.audit_key_bytes,
     )
 
     return Substrate(

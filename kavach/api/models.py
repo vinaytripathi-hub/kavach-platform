@@ -190,6 +190,54 @@ class AgentRegistration(BaseModel):
     registered_at: datetime
 
 
+class MandateConstraintBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str
+    operator: str
+    value: Any = None
+
+
+class MandateIssueRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mandate_id: str
+    originator_id: str
+    originator_kind: str
+    agent_id: str
+    action_scope: list[str]
+    constraints: list[MandateConstraintBody] = Field(default_factory=list)
+    expires_at: datetime
+    parent_mandate_id: str | None = None
+    nonce: str
+
+
+class MandateIssueResult(BaseModel):
+    mandate_id: str
+    token: str
+    mandate_digest: str
+
+
+class MandateView(BaseModel):
+    mandate_id: str
+    agent_id: str
+    originator_id: str
+    expires_at: datetime
+    payload: dict[str, Any]
+
+
+class AnomalyAckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    agent_id: str
+    resolution: str
+    operator_id: str
+    rationale: str = ""
+
+
+class MandateRevokeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revoked_by: str
+    reason: str = ""
+
+
 class PolicyUploadRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     use_case: str

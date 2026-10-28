@@ -15,8 +15,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavach.capabilities.audit._internal.chain import compute_hash, payload_digest
+from kavach.capabilities.audit._internal.chain import link_message, payload_digest
 from kavach.capabilities.audit._internal.models import AuditRecordRow
+from kavach.capabilities.audit.signer import HMACSigner, Signer
 from kavach.events._base import DomainEvent
 from kavach.events.registry import known_events
 
@@ -24,8 +25,8 @@ from kavach.events.registry import known_events
 class AuditChainWriter:
     """Maintains the per-tenant HMAC hash chain over all events."""
 
-    def __init__(self, key: bytes) -> None:
-        self._key = key
+    def __init__(self, signer: Signer | bytes) -> None:
+        self._signer: Signer = signer if not isinstance(signer, bytes) else HMACSigner(signer)
 
     @property
     def consumes(self) -> frozenset[str]:
@@ -41,7 +42,8 @@ class AuditChainWriter:
             position = head.position + 1
 
         digest = payload_digest(event.payload())
-        this_hash = compute_hash(self._key, prev_hash, position, event.event_id, digest)
+        message = link_message(prev_hash, position, event.event_id, digest)
+        this_hash = self._signer.sign(message)
         session.add(
             AuditRecordRow(
                 tenant_id=event.tenant_id,

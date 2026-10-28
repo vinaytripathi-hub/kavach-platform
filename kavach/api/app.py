@@ -118,6 +118,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
         request: Request,
         principal: AgentPrincipal = Depends(require_agent),
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        mandate_token: str | None = Header(default=None, alias="X-Kavach-Mandate"),
     ) -> Response:
         sub = get_substrate(request)
         _ensure_same_agent(principal, agent_id)
@@ -132,6 +133,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
                     action_type=body.action_type,
                     parameters=body.parameters,
                     context=body.context,
+                    mandate_token=mandate_token,
                 )
             except KeyError as exc:
                 raise ProblemError(422, "validation_error", "Unknown use case.", str(exc)) from exc
@@ -308,6 +310,125 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
         if status is None:
             raise ProblemError(404, "not_found", "Export not found.")
         return status
+
+    # -- mandates -----------------------------------------------------------
+
+    @app.post("/v1/mandates", tags=["mandates"], status_code=201)
+    async def issue_mandate(
+        body: m.MandateIssueRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.MandateIssueResult:
+        from kavach.events.schemas import Mandate, MandateConstraint
+
+        sub = get_substrate(request)
+        mandate = Mandate(
+            mandate_id=body.mandate_id,
+            originator_id=body.originator_id,
+            originator_kind=body.originator_kind,  # type: ignore[arg-type]
+            agent_id=body.agent_id,
+            action_scope=body.action_scope,
+            constraints=[
+                MandateConstraint(path=c.path, operator=c.operator, value=c.value)  # type: ignore[arg-type]
+                for c in body.constraints
+            ],
+            expires_at=body.expires_at,
+            parent_mandate_id=body.parent_mandate_id,
+            nonce=body.nonce,
+        )
+        event = await sub.service.issue_mandate(tenant_id=principal.tenant_id, mandate=mandate)
+        stored = await sub.service.get_mandate(
+            tenant_id=principal.tenant_id, mandate_id=body.mandate_id
+        )
+        return m.MandateIssueResult(
+            mandate_id=event.mandate_id,
+            token=stored.token if stored is not None else "",
+            mandate_digest=event.mandate_digest,
+        )
+
+    @app.get("/v1/mandates/{mandate_id}", tags=["mandates"])
+    async def get_mandate(
+        mandate_id: str,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> m.MandateView:
+        sub = get_substrate(request)
+        row = await sub.service.get_mandate(tenant_id=principal.tenant_id, mandate_id=mandate_id)
+        if row is None:
+            raise ProblemError(404, "not_found", "Mandate not found.")
+        return m.MandateView(
+            mandate_id=row.mandate_id,
+            agent_id=row.agent_id,
+            originator_id=row.originator_id,
+            expires_at=row.expires_at,
+            payload=row.payload,
+        )
+
+    @app.post("/v1/mandates/{mandate_id}/revoke", tags=["mandates"])
+    async def revoke_mandate(
+        mandate_id: str,
+        body: m.MandateRevokeRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> dict[str, str]:
+        sub = get_substrate(request)
+        try:
+            event = await sub.service.revoke_mandate(
+                tenant_id=principal.tenant_id,
+                mandate_id=mandate_id,
+                revoked_by=body.revoked_by,
+                reason=body.reason,
+            )
+        except KeyError as exc:
+            raise ProblemError(404, "not_found", "Mandate not found.", str(exc)) from exc
+        except ValueError as exc:
+            raise ProblemError(
+                409, "already_revoked", "Mandate already revoked.", str(exc)
+            ) from exc
+        return {"mandate_id": event.mandate_id, "status": "revoked"}
+
+    @app.get("/v1/agents/{agent_id}/anomalies", tags=["monitor"])
+    async def list_anomalies(
+        agent_id: str,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> dict[str, str]:
+        sub = get_substrate(request)
+        severity = await sub.service.current_anomaly_severity(
+            tenant_id=principal.tenant_id, agent_id=agent_id
+        )
+        return {"agent_id": agent_id, "severity": severity}
+
+    @app.post("/v1/anomalies/{anomaly_id}/acknowledge", tags=["monitor"])
+    async def acknowledge_anomaly(
+        anomaly_id: str,
+        body: m.AnomalyAckRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_operator),
+    ) -> dict[str, str]:
+        sub = get_substrate(request)
+        event = await sub.service.acknowledge_anomaly(
+            tenant_id=principal.tenant_id,
+            agent_id=body.agent_id,
+            anomaly_id=anomaly_id,
+            resolution=body.resolution,
+            operator_id=body.operator_id,
+            rationale=body.rationale,
+        )
+        return {"anomaly_id": event.anomaly_id, "resolution": event.resolution}
+
+    @app.get("/v1/agents/{agent_id}/metrics", tags=["monitor"])
+    async def agent_metrics(
+        agent_id: str,
+        request: Request,
+        principal: AgentPrincipal = Depends(require_agent),
+    ) -> dict[str, str]:
+        sub = get_substrate(request)
+        _ensure_same_agent(principal, agent_id)
+        severity = await sub.service.current_anomaly_severity(
+            tenant_id=principal.tenant_id, agent_id=agent_id
+        )
+        return {"agent_id": agent_id, "anomaly_severity": severity}
 
     # -- webhooks + admin ---------------------------------------------------
 

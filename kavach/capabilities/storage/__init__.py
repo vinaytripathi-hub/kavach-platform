@@ -21,6 +21,8 @@ from kavach.capabilities.storage._internal.models import (
     Base,
     EventRow,
     IdempotencyRow,
+    MandateRevocationRow,
+    MandateRow,
     OutboxRow,
     WebhookSubscriptionRow,
 )
@@ -38,6 +40,8 @@ __all__ = [
     "EventStore",
     "IdempotencyRow",
     "IdempotencyStore",
+    "MandateRevocationRow",
+    "MandateRow",
     "OutboxRow",
     "OutboxStore",
     "SupportsAppend",

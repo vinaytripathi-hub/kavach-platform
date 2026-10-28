@@ -35,6 +35,8 @@ services:
       KAVACH_JWT_SECRET: ${KAVACH_JWT_SECRET:?set a strong jwt secret}
       KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
       KAVACH_SDK_BRIDGE_MODE: ${KAVACH_SDK_BRIDGE_MODE:-fake}
+      KAVACH_MANDATE_VERIFIER_MODE: ${KAVACH_MANDATE_VERIFIER_MODE:-fake}
+      KAVACH_AUDIT_SIGNER_MODE: ${KAVACH_AUDIT_SIGNER_MODE:-hmac}
       KAVACH_EXPECTED_AUDIENCE: ${KAVACH_EXPECTED_AUDIENCE:-kavach}
       KAVACH_AUTO_CREATE_SCHEMA: ${KAVACH_AUTO_CREATE_SCHEMA:-false}
     command: ["uvicorn", "kavach.server:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -52,6 +54,18 @@ services:
       KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
       KAVACH_AUTO_CREATE_SCHEMA: "false"
     command: ["python", "-m", "kavach.worker"]
+
+  mcp:
+    build: .
+    depends_on:
+      - api
+    environment:
+      KAVACH_API_URL: http://api:8000
+      KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
+      KAVACH_AGENT_TOKEN: ${KAVACH_AGENT_TOKEN:-agent:agent-cs-01:kyc,account.funds,complaint}
+    command: ["python", "-m", "kavach.experiences.mcp_server", "--transport", "stdio"]
+    stdin_open: true
+    tty: true
 
   console:
     image: nginx:1.27-alpine

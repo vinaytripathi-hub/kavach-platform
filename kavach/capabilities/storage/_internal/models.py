@@ -106,3 +106,31 @@ class AgentRegistrationRow(Base):
     use_case: Mapped[str | None] = mapped_column(String(100), nullable=True)
     agent_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class MandateRow(Base):
+    """Stored mandate token and payload (ADR-0018)."""
+
+    __tablename__ = "mandates"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    mandate_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(200), index=True)
+    originator_id: Mapped[str] = mapped_column(String(200))
+    token: Mapped[str] = mapped_column(Text)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    parent_mandate_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class MandateRevocationRow(Base):
+    """Revocation record for a mandate (ADR-0018)."""
+
+    __tablename__ = "mandate_revocations"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    mandate_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    revoked_by: Mapped[str] = mapped_column(String(200))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

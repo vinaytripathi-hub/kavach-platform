@@ -29,10 +29,10 @@ Status legend: **Implemented** (in the prototype) · **Partial**
 | 03 | **Least & Zero Standing Privilege** — minimum scope per task; separation of duties; no persistent rights when idle | Policy engine is **default-deny** per rule set; action-type glob + scope check gate every decision; action schema is provisioned, not discovered at runtime | [`PolicyRuleSet.default_effect`](../../kavach/capabilities/policy/_internal/rules.py); [`PolicyEngine.evaluate`](../../kavach/capabilities/policy/_internal/engine.py); [`VerifiedAgent.authorizes`](../../kavach/capabilities/sdk_bridge/contracts.py) | Partial (no "zero standing privilege when idle" model; no formal Separation-of-Duties primitive; scopes persist for credential lifetime) |
 | 04 | **Short-Lived, Dynamic & Revocable Authorization** — JIT, time-bounded, audience-specific; continuous runtime verification; no long-lived bearer tokens | Agent credential is verified on every request against `expected_audience`; idempotency keys dedupe replays; operator and agent principals are separated and tenant-scoped | [`require_agent`](../../kavach/api/security.py); [`_idempotent`](../../kavach/api/app.py); [`SubstrateConfig.expected_audience`](../../kavach/composition/config.py) | Weak (no TTL enforcement, no revocation endpoint, no context-drift triggers; the operator token is a static shared secret in the prototype) |
 | 05 | **Human-in-the-Loop Triggers** — risk-threshold-driven escalation with sufficient context; consent-fatigue aware | Policy engine returns `step_up` for high-impact actions; `StepUpRequested` carries reason + `required_role`; operators resolve with `StepUpResolved` whose `decided_by: operator:<id>` is signed into the audit chain | [`PolicyEngine.evaluate`](../../kavach/capabilities/policy/_internal/engine.py); [`StepUpRequested` / `StepUpResolved`](../../kavach/events/schemas/stepup.py); `POST /v1/decisions/{id}/step-up/resolve`; step-up queue projection | **Implemented** (consent-fatigue safeguards — escalation batching, context summaries, rate caps — not yet modeled) |
-| 06 | **Mandates and Constraints** — cryptographically signed mandate statements defining intended outcomes and constraints; verifiable downstream | The decision substrate records intent-adjacent fields (`decided_by`, `reasoning`, matched rule) and signs them into the audit chain; action schemas are provisioned per use case | [`DecisionEmitted`](../../kavach/events/schemas/decision_primitives.py); use-case `PolicyRuleProvider` ([customer_service](../../kavach/usecases/customer_service/policy_rules.py)) | **Planned** (no `MandateIssued` artifact yet — the biggest green-field capability) |
+| 06 | **Mandates and Constraints** — cryptographically signed mandate statements defining intended outcomes and constraints; verifiable downstream | `Mandate` verified by `MandateVerifier` (fake HMAC or AP2 payment mandate), required per rule, recorded as `MandateIssued` / `MandatePresented` / `MandateRevoked`, and referenced by digest on the decision | [`kavach/capabilities/mandate`](../../kavach/capabilities/mandate/); [ADR-0018](../adr/0018-signed-mandates-and-policy-integration.md) | **Implemented** |
 | 07 | **Architectural Separation of Policy from Reasoning** — policy enforcement is architecturally outside the LLM; prompts cannot expand permissions | Three-layer architecture: the LLM/agent is outside the substrate and calls `POST /v1/agents/{id}/decisions`; `PolicyEngine` is a pure deterministic evaluator with no model in the loop; agent-presented tokens are verified out-of-band | [ADR-0001](../adr/0001-three-layer-architecture.md); [ADR-0007](../adr/0007-modular-capability-architecture.md); [`PolicyEngine`](../../kavach/capabilities/policy/_internal/engine.py); [`require_agent`](../../kavach/api/security.py) | **Implemented** |
 | 08 | **Deterministic Access Decisions** — deterministic primary mechanism; probabilistic signals are inputs, not primary deciders | Decision confidence is `Confidence(kind="rule_deterministic", score=1.0)` for policy outcomes; trust (`TrustAssessment`) and data sufficiency (`DataSufficiency`) are modeled as *inputs* with explicit sufficiency bands | [`rule_deterministic`](../../kavach/events/schemas/decision_primitives.py); [`TrustAssessment`](../../kavach/events/schemas/trust.py); [ADR-0013](../adr/0013-multimodal-data-sufficiency.md); [ADR-0014](../adr/0014-multidimensional-trust-substrate.md) | **Implemented** |
-| 09 | **Continuous Monitoring** — agent-specific metrics, thresholds, anomaly detection at agent scale and velocity | Read-side projections (timeline, trust, step-up queue) materialise agent behaviour; `TrustAssessmentEmitted` emits every decision; `DecisionFeedbackRecorded` closes the FP/FN loop; signed webhooks exfiltrate events to partner SIEM | [`query/projections`](../../kavach/query/projections/); [`TrustAssessmentEmitted`](../../kavach/events/schemas/trust_events.py); [`DecisionFeedbackRecorded`](../../kavach/events/schemas/feedback.py); [ADR-0009](../adr/0009-read-side-projections.md) | Partial (no anomaly detector in substrate; `AnomalyDetected` is named as planned in [ADR-0012](../adr/0012-decision-events-with-evidence-and-reasoning.md)) |
+| 09 | **Continuous Monitoring** — agent-specific metrics, thresholds, anomaly detection at agent scale and velocity | Bus-driven detectors emit `AnomalyDetected` with a bounded severity label. The current open severity is a policy input (`agent.anomaly_severity`). Operators acknowledge via `AnomalyAcknowledged` | [`kavach/capabilities/monitor`](../../kavach/capabilities/monitor/); [ADR-0019](../adr/0019-monitor-capability-and-anomaly-feedback-loop.md) | **Implemented** |
 | 10 | **Immutable Evidence** — unbroken, tamper-evident, append-only chain of custody; logging infrastructure independent of the agent | HMAC-SHA256 hash chain written **in the same transaction** as every event append; `AuditExporter` produces time-bounded, agent-scoped evidence packs with a detached `SignatureManifest` that any holder of the signing key can independently verify | [`AuditChainWriter`](../../kavach/capabilities/audit/_internal/chain.py); [`AuditExporter`](../../kavach/capabilities/audit/_internal/exporter.py); `POST /v1/audit/exports`; [ADR-0012](../adr/0012-decision-events-with-evidence-and-reasoning.md) | **Implemented** (software-held key; HSM/KMS and per-tenant chain-head lock are the stated hardening items) |
 
 ## How the tenets layer
@@ -59,28 +59,22 @@ these combinations as design properties:
 - **Audit tampering by a compromised agent** is mitigated by 10
   (logging infrastructure independent of the agent, chained and signed)
     60|  and 06 (originator intent cryptographically signed and preserved).
-  Tenet 10 is implemented; tenet 06 is the second-most-material gap.
+  Tenets 06, 09, and 10 are implemented. The remaining distance is
+  short-lived operator credentials and cryptographic identity maturity.
 
 ## Gaps and roadmap
 
 Ranked by distance to a credible BFSI claim across all ten tenets:
 
-1. **Tenet 06 — Signed mandates.** New `MandateIssued` event (signed by
-   the task originator), presentation and verification at decision
-   time, propagation to downstream calls. Reuses Pramana VC primitives.
-   Natural next ADR.
-    70|2. **Tenet 04 — Short-lived, revocable authorization.** Enforced
-   token `exp` / `nbf` at the API boundary, revocation endpoint,
-   context-drift triggers that can revoke in-flight. Replace the shared
-   operator token with an IdP integration.
-3. **Tenet 09 — Continuous monitoring with anomaly detection.** New
-   `monitor` capability that computes agent-specific baselines over the
-   existing projections and emits `AnomalyDetected` back into the
-   policy engine as a step-up input.
-4. **Tenet 03 — Zero standing privilege & Separation of Duties.**
+1. **Tenet 04 — Short-lived, revocable authorization.** Enforced
+   token `exp` / `nbf` at the API boundary beyond mandates, a general
+   credential revocation endpoint, and replacement of the shared
+   operator token with an IdP integration. Mandate expiry and
+   revocation (tenet 06) are in place.
+    70|2. **Tenet 03 — Zero standing privilege & Separation of Duties.**
    Session-scoped task tickets that attenuate the credential; a
     80|   declarative SoD check in `PolicyRuleSet`.
-5. **Tenets 01 / 02 — Cryptographic maturity.** Default deployments
+3. **Tenets 01 / 02 — Cryptographic maturity.** Default deployments
    should run on the Pramana adapter (or an equivalent EUDIW / IdP
    adapter), not the fake verifier.
 
@@ -90,7 +84,37 @@ custody of the audit signing key (tenet 10), operator IdP + RBAC
 (tenets 01, 04), chain-head lock for concurrent writers (tenet 10),
 edge TLS/mTLS and rate limiting (tenet 04 blast-radius control).
 
-    90|## Reference
+    90|## Industry alignment: FIDO AATWG, Google AP2, Mastercard Verifiable Intent
+
+NIST's tenets are a conceptual scorecard. Three industry efforts
+specify a working protocol stack that converges on the same shape:
+a signed, bounded, originator-issued mandate verified by deterministic
+code outside the agent's reasoning path.
+
+| Source | Status (27 Oct 2026) | What it specifies |
+|--------|----------------------|-------------------|
+| FIDO Agentic Authentication TWG | Work commenced 28 Apr 2026; no public draft date | Verifiable user instructions, agent authentication, trusted delegation |
+| Google AP2 | v0.2, 28 Apr 2026 | Checkout + payment mandates as SD-JWT; constraint vocabulary; non-agentic Trusted Surface |
+| Mastercard Verifiable Intent | v0.1-draft, 18 Feb 2026 | L1 identity → L2 user authorization → L3 agent execution; attenuation is normative |
+
+| Concern | NIST | AP2 | Verifiable Intent | Kavach |
+|---------|------|-----|-------------------|--------|
+| Signed mandate | 06 | `mandate.payment.open.1` | L2 autonomous mandate | `Mandate` + `MandateIssued` ([ADR-0018](../adr/0018-signed-mandates-and-policy-integration.md)) |
+| Constraints | 06, 03 | amount, payee, instrument, budget | `constraints[]` on L2 | `MandateConstraint` |
+| Attenuation | 02 | payment `transaction_id` binds checkout | L3 must satisfy L2 | `parent_mandate_id` + strict subset |
+| Policy outside reasoning | 07 | Trusted Surface must be non-agentic | Verifier is a separate role | `PolicyEngine` |
+| Deterministic enforcement | 08 | Verifier is deterministic code | Normative verifier algorithm | `rule_deterministic` |
+| Evidence | 10 | Mandates are dispute evidence | Tamper-evident chain | HMAC audit chain |
+
+AP2 scopes itself to mandate credentials and per-role verification.
+Verifiable Intent explicitly leaves transport, key management,
+enrollment, dispute resolution, and regulatory compliance mapping out
+of scope. Kavach is the runtime that records those decisions, enforces
+them in policy, and exports tamper-evident evidence. A per-spec
+crosswalk lives in
+[fido-agentic-standards-mapping.md](./fido-agentic-standards-mapping.md).
+
+## Reference
 
 - NIST / NCCoE, *Design Tenets for Agent Identity Management Systems*,
   Cybersecurity Insights blog, 27 October 2026. Harold Booth, Bill

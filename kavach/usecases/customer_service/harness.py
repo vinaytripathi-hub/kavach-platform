@@ -61,17 +61,39 @@ def run_demo_flow(
         )
         summary["kyc_outcome"] = allow["outcome"]
 
-        # 4. High-value transfer -> step_up.
+        # 4. Originator issues a mandate that covers the transfer amount.
+        issued = operator.issue_mandate(
+            {
+                "mandate_id": "m-demo-1",
+                "originator_id": "customer-1",
+                "originator_kind": "human",
+                "agent_id": agent_id,
+                "action_scope": ["account.funds.transfer"],
+                "constraints": [
+                    {"path": "payment_amount.amount", "operator": "lte", "value": 500000}
+                ],
+                "expires_at": (utcnow() + timedelta(hours=1)).isoformat(),
+                "nonce": "nonce-demo-1",
+            }
+        )
+        summary["mandate_id"] = issued["mandate_id"]
+        summary["steps"].append("issued mandate")
+
+        # 5. High-value transfer within the mandate -> step_up.
         stepup = agent.request_decision(
             agent_id,
             session_id="sess-1",
             action_type="account.funds.transfer",
             parameters={"amount": 250000, "to": "ACC-999"},
+            mandate_token=issued["token"],
         )
         summary["transfer_outcome"] = stepup["outcome"]
+        evidence = stepup.get("evidence") or {}
+        attributes = evidence.get("attributes") or {}
+        summary["mandate_digest"] = attributes.get("mandate_digest")
         decision_id = stepup["decision_id"]
 
-        # 5. Operator approves the step-up.
+        # 6. Operator approves the step-up.
         resolved = operator.resolve_step_up(
             decision_id,
             resolution="approve",

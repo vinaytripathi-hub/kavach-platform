@@ -14,12 +14,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kavach.capabilities.audit._internal.chain import (
-    compute_hash,
-    key_id,
-    sign,
-)
+from kavach.capabilities.audit._internal.chain import link_message
 from kavach.capabilities.audit._internal.models import AuditRecordRow
+from kavach.capabilities.audit.signer import HMACSigner, Signer
 from kavach.events import utcnow
 
 
@@ -64,8 +61,8 @@ class AuditExport(BaseModel):
 class AuditExporter:
     """Builds and verifies signed evidence packs from the audit chain."""
 
-    def __init__(self, key: bytes) -> None:
-        self._key = key
+    def __init__(self, signer: Signer | bytes) -> None:
+        self._signer: Signer = signer if not isinstance(signer, bytes) else HMACSigner(signer)
 
     async def export(
         self,
@@ -103,9 +100,9 @@ class AuditExporter:
         if records:
             chain_head = records[-1].this_hash
             manifest = SignatureManifest(
-                key_id=key_id(self._key),
+                key_id=self._signer.key_id,
                 chain_head=chain_head,
-                signature=sign(self._key, chain_head),
+                signature=self._signer.sign(chain_head),
             )
         return AuditExport(
             tenant_id=tenant_id,
@@ -120,12 +117,8 @@ class AuditExporter:
         if not export.records:
             return export.signature_manifest is None
         for rec in export.records:
-            expected = compute_hash(
-                self._key,
-                rec.prev_hash,
-                rec.position,
-                rec.event_id,
-                rec.payload_digest,
+            expected = self._signer.sign(
+                link_message(rec.prev_hash, rec.position, rec.event_id, rec.payload_digest)
             )
             if expected != rec.this_hash:
                 return False
@@ -134,4 +127,4 @@ class AuditExporter:
             return False
         if manifest.chain_head != export.records[-1].this_hash:
             return False
-        return sign(self._key, manifest.chain_head) == manifest.signature
+        return self._signer.verify(manifest.chain_head, manifest.signature)
