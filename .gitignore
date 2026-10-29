@@ -73,6 +73,12 @@ ipython_config.py
 secrets/
 .secrets/
 
+# Node / TypeScript SDK + examples
+node_modules/
+*.tsbuildinfo
+sdks/typescript/dist/
+examples/**/package-lock.json
+
 # IDE
 .vscode/
 .idea/

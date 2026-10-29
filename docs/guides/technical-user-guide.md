@@ -1,6 +1,6 @@
 # Kavach Platform — Technical User Guide
 
-> **Covered as of Phase 1.** This guide documents only the substrate as it is
+> **Covered as of Phase 1.5.** This guide documents only the substrate as it is
 > shipped and tested today. It is a living document that grows at every
 > roadmap phase gate (see [`docs/roadmap.md`](../roadmap.md)). Features that
 > are planned but not yet shipped are explicitly marked as *forthcoming*.
@@ -512,10 +512,39 @@ screen; it maps to EU AI Act Articles 12 (logging) and 13 (transparency).
 
 ## 8. Integrating an agent today
 
-Until first-class SDKs ship (see below), there are two supported integration
-paths.
+Phase 1.5 ships **first-class SDKs in two languages**, plus the MCP server:
 
-### 8.1 In-repo Python client (`kavach.client`)
+- **Python — `aurvia-kavach`** (import package `kavach`), exposing
+  `kavach.client.KavachClient`.
+- **TypeScript — `@aurvia/kavach`**, exposing `KavachClient`, whose methods
+  mirror the Python client **1:1** in camelCase and are kept in lockstep by a
+  cross-SDK contract test (§8.4).
+- **MCP server** (`kavach.experiences.mcp_server`) for local and networked
+  agent hosts.
+
+> **Registry release is pending.** The `aurvia-kavach` and `@aurvia/kavach`
+> packages are built and release-ready, and the publish CI exists (§8.4), but
+> the **first publish to PyPI and npm has not happened yet** — it is blocked on
+> PyPI Trusted Publishing / `NPM_TOKEN` setup and claiming the `@aurvia` npm
+> scope. The `pip install aurvia-kavach` / `npm install @aurvia/kavach`
+> commands below are the **intended** usage once published. Until then, install
+> from source as noted in each subsection (`pip install -e .` for Python, the
+> `file:` link / `scripts/smoke-sdk-node.sh` for TypeScript).
+
+### 8.1 Python SDK (`aurvia-kavach`)
+
+The Python distribution is published as **`aurvia-kavach`** while the import
+package stays **`kavach`** (Stripe-style: `pip install aurvia-kavach` /
+`import kavach`). It supports **Python 3.11, 3.12, and 3.13**
+(`requires-python = ">=3.11,<3.14"`).
+
+```bash
+# Intended, once published to PyPI:
+pip install aurvia-kavach
+
+# Today (registry release pending), install from source:
+pip install -e .
+```
 
 `KavachClient` (`kavach/client.py`) is a thin synchronous `httpx` wrapper over
 the `/v1` contract. It sets `Authorization`, `X-Kavach-Tenant`, optional
@@ -551,7 +580,102 @@ Operator-scoped helpers (`issue_mandate`, `revoke_mandate`, `resolve_step_up`,
 `get_trust`, `get_timeline`, `request_audit_export`, `register_agent`,
 `upload_policy`, `create_webhook_subscription`) require an operator token.
 
-### 8.2 MCP server (`kavach.experiences.mcp_server`)
+### 8.2 TypeScript SDK (`@aurvia/kavach`)
+
+`@aurvia/kavach` (`sdks/typescript/`) is a hand-polished `KavachClient` whose
+methods mirror `kavach/client.py` 1:1 in camelCase. The wire-level types under
+`src/types.ts` are generated from the frozen
+[`docs/api/openapi.yaml`](../api/openapi.yaml) via `openapi-typescript`
+(`npm run gen:types`); the client itself returns plain JSON objects to match
+the Python client's `dict[str, Any]` ergonomics. It requires **Node 18+**
+(uses the global `fetch`).
+
+```bash
+# Intended, once published to npm:
+npm install @aurvia/kavach
+
+# Today (registry release pending), consume from source via a file: link,
+# as examples/node/minimal-agent does:
+#   "@aurvia/kavach": "file:../../../sdks/typescript"
+```
+
+```ts
+import { KavachClient, KavachApiError } from "@aurvia/kavach";
+
+// Two principals: the agent acts; the operator governs.
+const agent = new KavachClient({
+  baseUrl: "http://127.0.0.1:8000",
+  token: "agent:agent-cs-01:account.funds,kyc",
+  tenant: "bank-1",
+});
+const operator = new KavachClient({
+  baseUrl: "http://127.0.0.1:8000",
+  token: process.env.KAVACH_OPERATOR_TOKEN!,
+  tenant: "bank-1",
+  operator: "op-demo",
+});
+
+// Operator issues a bounded, signed mandate.
+const issued = await operator.issueMandate({
+  mandate_id: "m-001",
+  originator_id: "customer-1",
+  originator_kind: "human",
+  agent_id: "agent-cs-01",
+  action_scope: ["account.funds.transfer"],
+  constraints: [{ path: "payment_amount.amount", operator: "lte", value: 500000 }],
+  expires_at: new Date(Date.now() + 3600_000).toISOString(),
+  nonce: "n-001",
+});
+
+try {
+  const decision = await agent.requestDecision("agent-cs-01", {
+    sessionId: "s1",
+    actionType: "account.funds.transfer",
+    parameters: { amount: 250000 },
+    useCase: "customer_service",
+    mandateToken: issued.token as string, // presented on X-Kavach-Mandate
+  });
+  if (decision.outcome === "step_up") {
+    // route to a human operator to resolve
+    await operator.resolveStepUp(decision.decision_id as string, {
+      resolution: "approve",
+      operatorId: "op-demo",
+      rationale: "verified with customer",
+    });
+  }
+} catch (err) {
+  if (err instanceof KavachApiError) {
+    console.error(err.status, err.problem); // RFC 7807 problem body
+  }
+}
+```
+
+**Client options** (`KavachClientOptions`): `baseUrl`, `token`, optional
+`tenant` (default `default`), optional `operator` (sets `X-Kavach-Operator`),
+and optional `timeoutMs` (default `10_000`).
+
+**Available methods** (camelCase counterparts of the Python client):
+`health`, `recordAction`, `requestDecision`, `resolveStepUp`, `getTrust`,
+`getTimeline`, `requestAuditExport`, `registerAgent`, `issueMandate`,
+`getMandate`, `revokeMandate`, `uploadPolicy`, `createWebhookSubscription`.
+
+**Error handling:** any non-2xx response throws **`KavachApiError`**, which
+carries the numeric `status` and the parsed RFC 7807 `problem` body (object or
+string).
+
+**Reference app & cross-language proof:**
+
+- [`examples/node/minimal-agent`](../../examples/node/minimal-agent) — a
+  ~100-line Node agent on `@aurvia/kavach` that drives the full
+  issue-mandate → request-decision → handle-`step_up` → export-evidence loop,
+  mirroring the Python customer-service harness. Configured by `KAVACH_BASE_URL`,
+  `KAVACH_TENANT`, and `KAVACH_OPERATOR_TOKEN`.
+- [`scripts/smoke-sdk-node.sh`](../../scripts/smoke-sdk-node.sh) — one command
+  that boots a local API (fake verifier, file-backed SQLite), builds and links
+  the SDK, then runs the Node reference agent end-to-end against the live API.
+  Ends with `SDK NODE SMOKE TEST PASSED`.
+
+### 8.3 MCP server (`kavach.experiences.mcp_server`)
 
 Kavach ships an MCP server built on the official Model Context Protocol SDK.
 Each tool is a thin wrapper over `KavachClient`. It speaks two transports:
@@ -593,12 +717,43 @@ Example Claude Desktop config (from `scripts/smoke-mcp.sh`):
 }
 ```
 
-### 8.3 Forthcoming — published SDKs (Phase 1.5)
+### 8.4 SDK contract tests, CI & publishing
 
-First-class published SDKs — **PyPI `aurvia-kavach`** and **npm
-`@aurvia/kavach`** — and runnable examples are planned for **Phase 1.5**.
-They do not exist yet; until they ship, use the in-repo Python client or the
-MCP server above.
+**Cross-SDK contract tests** keep the two SDKs from drifting:
+
+- `sdks/typescript/test/contract.spec.ts` (vitest) exercises every TS method
+  against a mocked `fetch`, asserting the exact HTTP verb, path, headers
+  (`Authorization`, `X-Kavach-Tenant`, `X-Kavach-Operator`, `Idempotency-Key`,
+  `X-Kavach-Mandate`), and the **snake_case** request body — the same wire
+  contract the Python client speaks. It also asserts `KavachApiError` is thrown
+  with the RFC 7807 body on a non-2xx.
+- `tests/sdk/test_python_sdk_contract.py` (pytest) asserts the Python
+  distribution is named **`aurvia-kavach`** (while the import package is
+  `kavach` and its version matches), and that **every** public method on
+  `kavach.client.KavachClient` has a camelCase counterpart in the committed TS
+  `client.ts`.
+
+**TypeScript SDK CI** — `.github/workflows/sdk-typescript.yml` runs on pushes
+and PRs to `main` that touch `sdks/typescript/**`, `docs/api/openapi.yaml`, or
+the workflow itself (Node 20). Steps: install → **OpenAPI types in-sync check**
+(`npm run gen:types` then `git diff --exit-code src/types.ts`, failing if the
+generated `src/types.ts` is stale) → `npm run typecheck` → `npm test` (the
+contract suite) → `npm run build`.
+
+**Publish workflows** (tag `v*` or a published GitHub Release; releases to the
+public registries are **pending** first-time setup):
+
+- `.github/workflows/publish-python.yml` — builds the sdist + wheel (`uv build`),
+  runs a **smoke-install matrix** that installs the built wheel and imports
+  `kavach` on **Python 3.11 / 3.12 / 3.13**, performs a **TestPyPI dry-run**,
+  and publishes to **PyPI only on a published Release** via **Trusted
+  Publishing (OIDC)** — no long-lived tokens. Publishers must be configured on
+  PyPI/TestPyPI before the first release.
+- `.github/workflows/publish-npm.yml` — typecheck + test + build, then
+  `npm publish --provenance --access public` (a `--dry-run` on a tag, the real
+  publish on a Release). Requires an `NPM_TOKEN` with publish rights and the
+  claimed `@aurvia` scope; **provenance** cryptographically links the artifact
+  to the workflow run.
 
 ---
 
@@ -690,3 +845,6 @@ rather than unit tests and are omitted from the coverage source.
 - **Phase 1 — initial guide:** architecture, run/config, `/v1` API reference,
   mandates (fake + AP2), policy, audit/Signer, MCP + Python-client
   integration, testing.
+- **Phase 1.5 — `aurvia-kavach` on PyPI + `@aurvia/kavach` TS SDK (1:1 with the
+  Python client), contract tests, Node reference agent, and publish CI
+  (registry release pending).**

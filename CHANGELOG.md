@@ -31,6 +31,25 @@ once the first stable release lands.
   verifies bit-for-bit as before.
 - **Swarm scorecard** runner at `kavach/testing/swarm.py`.
 
+### Added — Phase 1.5: installable SDKs (Python + TypeScript)
+
+- **Python distribution renamed to `aurvia-kavach`** (import package stays
+  `kavach`), with support widened to Python 3.11 / 3.12 / 3.13.
+- **TypeScript SDK `@aurvia/kavach`** under `sdks/typescript/`: types generated
+  from `docs/api/openapi.yaml`, and a hand-polished `KavachClient` whose methods
+  mirror the Python reference client 1:1 (camelCase). Non-2xx responses throw
+  `KavachApiError` carrying the RFC 7807 body.
+- **Cross-SDK contract tests** keep the two clients in lockstep
+  (`tests/sdk/test_python_sdk_contract.py` + `sdks/typescript/test/contract.spec.ts`).
+- **Node reference agent** at `examples/node/minimal-agent/` and a one-command
+  cross-language proof `scripts/smoke-sdk-node.sh` (issue mandate → decide →
+  step-up → export evidence).
+- **Publish CI**: `sdk-typescript.yml` (typecheck/test/build + OpenAPI
+  types-in-sync check), `publish-python.yml` (3.11/3.12/3.13 smoke-install
+  matrix → TestPyPI dry-run → PyPI via Trusted Publishing on release), and
+  `publish-npm.yml` (`npm publish --provenance`). First public-registry release
+  is pending credentials and the `@aurvia` npm scope.
+
 ### Fixed
 
 - Duplicate mandate issuance now returns `409 mandate_already_exists`

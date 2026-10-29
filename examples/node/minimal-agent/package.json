@@ -1,0 +1,14 @@
+{
+  "name": "kavach-minimal-agent",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Minimal Node agent demonstrating @aurvia/kavach: issue mandate -> request decision -> handle step-up -> export evidence.",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@aurvia/kavach": "file:../../../sdks/typescript"
+  }
+}

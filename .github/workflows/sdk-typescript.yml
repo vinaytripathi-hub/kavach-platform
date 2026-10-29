@@ -1,0 +1,52 @@
+name: SDK (TypeScript)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sdks/typescript/**"
+      - "docs/api/openapi.yaml"
+      - ".github/workflows/sdk-typescript.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "sdks/typescript/**"
+      - "docs/api/openapi.yaml"
+      - ".github/workflows/sdk-typescript.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: sdks/typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        run: npm install
+
+      - name: Types are in sync with the frozen OpenAPI contract
+        run: |
+          npm run gen:types
+          git diff --exit-code src/types.ts \
+            || (echo "::error::src/types.ts is stale; run 'npm run gen:types' and commit." && exit 1)
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Contract tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

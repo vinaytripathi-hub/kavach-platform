@@ -1,6 +1,6 @@
 # Kavach Platform — Business User Guide
 
-> **Covered as of Phase 1.** This guide describes only what has shipped and
+> **Covered as of Phase 1.5.** This guide describes only what has shipped and
 > been tested in the current working prototype. Features that are planned for
 > later phases are clearly marked as *coming later* and are not yet available.
 
@@ -187,6 +187,16 @@ an auditor who holds the verification key can independently confirm it is
 complete and unaltered. This is the artifact you hand to internal audit, to a
 regulator, or to a dispute-resolution process.
 
+**Giving your developers a head start.** Your engineering teams can now wire
+Kavach into their own agents through ready-made building blocks for both major
+development ecosystems, without having to understand or modify Kavach's
+internals. A small runnable reference application shows the complete
+accountability loop — a bounded signed mandate, an agent requesting a
+high-impact action, escalation to a human, approval, and a signed evidence
+export — working end-to-end, so a prospective partner can see it in action
+within minutes. This turns adoption from a research project into a
+straightforward integration task.
+
 ---
 
 ## 5. Compliance value in business terms
@@ -262,7 +272,7 @@ requirements.
 
 Being honest about scope is a core principle of this guide.
 
-**Available and tested today (Phase 1):**
+**Available and tested today (Phase 1.5):**
 
 - The accountability substrate: policy decisions (allow / deny / step-up),
   signed tamper-evident evidence, multidimensional trust, and continuous
@@ -274,14 +284,22 @@ Being honest about scope is a core principle of this guide.
 - The **operator console** with timeline, anomalies, trust, step-up queue, and
   evidence-export screens.
 - On-premise deployment inside your own perimeter.
+- **Developer SDKs and a reference agent**: Kavach can now be adopted as a
+  one-line install in both major ecosystems — a Python package and a
+  TypeScript/Node package — so your teams treat it as a dependency they add
+  rather than source they have to work from. A runnable Node **reference agent**
+  demonstrates the full accountability loop end-to-end (bounded signed mandate →
+  high-value action → human step-up → approval → signed evidence export), and
+  automated contract tests keep the two language versions provably in lockstep
+  so they never drift. *Honest status:* the packages are release-ready and can
+  be installed from the project today; the **first publish to the public package
+  registries is still pending** (it requires release credentials and claiming the
+  package names) and is imminent.
 
 **Coming in later phases (not yet available):**
 
 - **Additional use cases** beyond customer service (for example, credit
   underwriting and trading are planned but not yet built).
-- **Developer SDKs and integration helpers** to make it easier for your teams to
-  connect agents and to issue mandates. *Documentation for these will appear in
-  this guide only once they actually ship.*
 - **Operator console polish**, including mandate-issuance wizards and reusable
   mandate templates.
 - **Identity-lifecycle hardening**: shorter-lived and automatically revocable
@@ -331,3 +349,5 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
 
 - **Phase 1 — initial guide:** substrate concepts, mandate + step-up +
   signed-evidence workflows, compliance framing.
+- **Phase 1.5 — installable Python + TypeScript SDKs and a runnable Node
+  reference agent; the integration story for partner developers.**

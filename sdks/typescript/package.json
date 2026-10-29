@@ -1,0 +1,41 @@
+{
+  "name": "@aurvia/kavach",
+  "version": "0.0.1",
+  "description": "TypeScript SDK for the Kavach Platform /v1 API — agent accountability for Indian BFSI.",
+  "license": "LicenseRef-Proprietary",
+  "author": "Vinay Tripathi <vinay@aurviaglobal.com>",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vinaysflow/kavach-platform.git",
+    "directory": "sdks/typescript"
+  },
+  "scripts": {
+    "gen:types": "openapi-typescript ../../docs/api/openapi.yaml -o src/types.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,85 @@
+name: Publish Python (aurvia-kavach)
+
+# Tag-triggered release for the Python distribution `aurvia-kavach`.
+# Flow: build -> smoke-install matrix (3.11/3.12/3.13) -> TestPyPI dry-run ->
+# PyPI (only on a published GitHub Release). Uses PyPI Trusted Publishing
+# (OIDC); no long-lived tokens needed. Configure the publishers on PyPI and
+# TestPyPI for this repo + environment before the first release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Build
+        run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  smoke-install:
+    name: Smoke install (py${{ matrix.python }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install the built wheel and import
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          python -c "import kavach; from kavach.client import KavachClient; print('aurvia-kavach', kavach.__version__, 'import OK')"
+
+  testpypi:
+    name: TestPyPI dry-run
+    needs: smoke-install
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  pypi:
+    name: Publish to PyPI
+    if: github.event_name == 'release'
+    needs: testpypi
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

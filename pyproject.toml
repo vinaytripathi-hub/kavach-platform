@@ -7,11 +7,11 @@ build-backend = "hatchling.build"
 # ============================================================================
 
 [project]
-name = "kavach-platform"
+name = "aurvia-kavach"
 version = "0.0.1"
 description = "Kavach Platform — Agent Accountability for Indian BFSI (proprietary, all rights reserved)"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.14"
 license = {text = "Proprietary — All Rights Reserved"}
 authors = [
     {name = "Vinay Tripathi", email = "vinay@aurviaglobal.com"},
@@ -27,10 +27,11 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial",
     "Typing :: Typed",
-    "Private :: Do Not Upload",
 ]
 
 # Runtime dependencies.

@@ -1,0 +1,54 @@
+name: Publish npm (@aurvia/kavach)
+
+# Tag-triggered release for the TypeScript SDK `@aurvia/kavach`, versioned in
+# lockstep with the Python package. Publishes with npm provenance (--provenance)
+# so the artifact is cryptographically linked to this workflow run. Requires an
+# NPM_TOKEN secret with publish rights to the @aurvia scope, and the @aurvia
+# npm scope must be claimed before the first release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build + publish
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/typescript
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        run: npm install
+
+      - name: Typecheck + test + build
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Publish (dry-run unless a release)
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            npm publish --provenance --access public
+          else
+            npm publish --provenance --access public --dry-run
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
