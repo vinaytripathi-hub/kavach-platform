@@ -336,7 +336,12 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
             parent_mandate_id=body.parent_mandate_id,
             nonce=body.nonce,
         )
-        event = await sub.service.issue_mandate(tenant_id=principal.tenant_id, mandate=mandate)
+        try:
+            event = await sub.service.issue_mandate(tenant_id=principal.tenant_id, mandate=mandate)
+        except ValueError as exc:
+            raise ProblemError(
+                409, "mandate_already_exists", "Mandate already exists.", str(exc)
+            ) from exc
         stored = await sub.service.get_mandate(
             tenant_id=principal.tenant_id, mandate_id=body.mandate_id
         )

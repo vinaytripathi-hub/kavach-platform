@@ -43,7 +43,17 @@ def _jwk(kid: str) -> JWK:
     return JWK(**raw)
 
 
-def _chain(issuer: JWK, holder: JWK) -> str:
+def _mint(
+    issuer: JWK,
+    holder: JWK,
+    *,
+    amount_max: int = 500000,
+    presented_amount: int = 250000,
+    allowed_payee: str = "merchant-1",
+    presented_payee: str = "merchant-1",
+    nonce: str = "checkout-hash-demo",
+    aud: str = "kavach",
+) -> str:
     now = int(time.time())
     holder_pub = json.loads(holder.export_public())
     client = MandateClient()
@@ -51,9 +61,9 @@ def _chain(issuer: JWK, holder: JWK) -> str:
         payloads=[
             OpenPaymentMandate(
                 constraints=[
-                    AmountRange(currency="INR", min=0, max=500000),
-                    AllowedPayees(allowed=[Merchant(id="merchant-1", name="Merchant")]),
-                    Budget(currency="INR", max=500000),
+                    AmountRange(currency="INR", min=0, max=amount_max),
+                    AllowedPayees(allowed=[Merchant(id=allowed_payee, name="Merchant")]),
+                    Budget(currency="INR", max=amount_max),
                 ],
                 cnf={"jwk": holder_pub},
                 risk_data={"kavach_agent_id": _AGENT, "kavach_originator_id": "customer-1"},
@@ -68,18 +78,22 @@ def _chain(issuer: JWK, holder: JWK) -> str:
         mandate_token=open_token,
         payloads=[
             PaymentMandate(
-                transaction_id="checkout-hash-demo",
-                payee=Merchant(id="merchant-1", name="Merchant"),
-                payment_amount=Amount(amount=250000, currency="INR"),
+                transaction_id=nonce,
+                payee=Merchant(id=presented_payee, name="Merchant"),
+                payment_amount=Amount(amount=presented_amount, currency="INR"),
                 payment_instrument=PaymentInstrument(id="card-1", type="card", description="Demo"),
                 iat=now,
                 exp=now + 3600,
             )
         ],
-        nonce="checkout-hash-demo",
-        aud="kavach",
+        nonce=nonce,
+        aud=aud,
     )
     return presented
+
+
+def _chain(issuer: JWK, holder: JWK) -> str:
+    return _mint(issuer, holder)
 
 
 def test_sdk_chain_verifies_and_translates_constraints() -> None:
@@ -197,3 +211,141 @@ async def test_ap2_mode_issues_a_chain_the_decision_can_present() -> None:
     assert stepped.outcome == "step_up"
     assert stepped.decision_event.evidence.attributes["mandate_digest"] == issued.mandate_digest
     await substrate.dispose()
+
+
+# -- unhappy and edge matrix (parity with the fake verifier) -----------------
+
+
+def _build_mandate(
+    *,
+    agent_id: str = _AGENT,
+    scope: tuple[str, ...] = ("account.funds.transfer",),
+    issued_delta: timedelta = timedelta(0),
+    expires_delta: timedelta = timedelta(hours=1),
+    nonce: str = "checkout-hash-demo",
+    mandate_id: str = "m-edge",
+) -> Mandate:
+    now = datetime.now(UTC).replace(microsecond=0)
+    return Mandate(
+        mandate_id=mandate_id,
+        originator_id="customer-1",
+        originator_kind="human",
+        agent_id=agent_id,
+        action_scope=list(scope),
+        constraints=[MandateConstraint(path="payment_amount.amount", operator="lte", value=500000)],
+        issued_at=now + issued_delta,
+        expires_at=now + expires_delta,
+        nonce=nonce,
+    )
+
+
+def test_expired_ap2_chain_rejected() -> None:
+    verifier = AP2MandateVerifier(b"k" * 32)
+    token = verifier.issue_chain(
+        _build_mandate(issued_delta=timedelta(hours=-1), expires_delta=timedelta(seconds=-10))
+    )
+    result = verifier.verify(
+        token,
+        expected_agent_id=_AGENT,
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+    )
+    assert not result.verified
+    assert "expired" in result.reason.lower()
+
+
+def test_wrong_agent_ap2_chain_rejected() -> None:
+    verifier = AP2MandateVerifier(b"k" * 32)
+    token = verifier.issue_chain(_build_mandate(agent_id="agent-cs-01"))
+    result = verifier.verify(
+        token,
+        expected_agent_id="someone-else",
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+    )
+    assert not result.verified
+    assert "agent" in result.reason.lower()
+
+
+def test_scope_mismatch_ap2_chain_rejected() -> None:
+    verifier = AP2MandateVerifier(b"k" * 32)
+    token = verifier.issue_chain(_build_mandate(scope=("account.funds.transfer",)))
+    result = verifier.verify(
+        token,
+        expected_agent_id=_AGENT,
+        expected_action="kyc.document.verify",
+        now=datetime.now(UTC),
+    )
+    assert not result.verified
+    assert "scope" in result.reason.lower()
+
+
+def test_revoked_ap2_chain_rejected() -> None:
+    verifier = AP2MandateVerifier(b"k" * 32)
+    token = verifier.issue_chain(_build_mandate(mandate_id="m-revoked"))
+    result = verifier.verify(
+        token,
+        expected_agent_id=_AGENT,
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+        revoked_ids=frozenset({"m-revoked"}),
+    )
+    assert not result.verified
+    assert "revoked" in result.reason.lower()
+
+
+def test_wrong_nonce_rejected() -> None:
+    issuer = _jwk("issuer-1")
+    holder = _jwk("agent-1")
+    token = _mint(issuer, holder, nonce="checkout-hash-demo")
+    result = AP2MandateVerifier(b"unused", issuer_jwk=issuer).verify(
+        token,
+        expected_agent_id=_AGENT,
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+        expected_aud="kavach",
+        expected_nonce="the-wrong-nonce",
+    )
+    assert not result.verified
+
+
+def test_amount_over_range_rejected() -> None:
+    issuer = _jwk("issuer-1")
+    holder = _jwk("agent-1")
+    token = _mint(issuer, holder, amount_max=1000, presented_amount=250000)
+    result = AP2MandateVerifier(b"unused", issuer_jwk=issuer).verify(
+        token,
+        expected_agent_id=_AGENT,
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+        expected_aud="kavach",
+        expected_nonce="checkout-hash-demo",
+    )
+    assert not result.verified
+
+
+def test_disallowed_payee_rejected() -> None:
+    issuer = _jwk("issuer-1")
+    holder = _jwk("agent-1")
+    token = _mint(issuer, holder, allowed_payee="merchant-1", presented_payee="merchant-evil")
+    result = AP2MandateVerifier(b"unused", issuer_jwk=issuer).verify(
+        token,
+        expected_agent_id=_AGENT,
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+        expected_aud="kavach",
+        expected_nonce="checkout-hash-demo",
+    )
+    assert not result.verified
+
+
+def test_malformed_chain_rejected() -> None:
+    result = AP2MandateVerifier(b"k" * 32).verify(
+        "garbage~~more-garbage~",
+        expected_agent_id=_AGENT,
+        expected_action="account.funds.transfer",
+        now=datetime.now(UTC),
+        expected_aud="kavach",
+        expected_nonce="checkout-hash-demo",
+    )
+    assert not result.verified

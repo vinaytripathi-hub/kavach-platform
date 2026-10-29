@@ -182,6 +182,139 @@ async def test_operator_token_required_for_resolve(client: httpx.AsyncClient) ->
     assert resp.status_code == 403
 
 
+def _mandate_payload() -> dict[str, object]:
+    return {
+        "mandate_id": "m-dup",
+        "originator_id": "customer-1",
+        "originator_kind": "human",
+        "agent_id": "agent-1",
+        "action_scope": ["account.funds.transfer"],
+        "constraints": [{"path": "payment_amount.amount", "operator": "lte", "value": 500000}],
+        "expires_at": "2100-01-01T00:00:00+00:00",
+        "nonce": "n-dup",
+    }
+
+
+async def test_duplicate_mandate_issue_returns_409(client: httpx.AsyncClient) -> None:
+    first = await client.post("/v1/mandates", json=_mandate_payload(), headers=_operator_headers())
+    assert first.status_code == 201, first.text
+
+    second = await client.post("/v1/mandates", json=_mandate_payload(), headers=_operator_headers())
+    assert second.status_code == 409
+    assert second.headers["content-type"].startswith("application/problem+json")
+    assert second.json()["code"] == "mandate_already_exists"
+
+
+def _operator_headers_tenant(tenant: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {OPERATOR_TOKEN}", "X-Kavach-Tenant": tenant}
+
+
+async def test_malformed_mandate_header_denies_not_500(client: httpx.AsyncClient) -> None:
+    resp = await client.post(
+        "/v1/agents/agent-1/decisions",
+        json={
+            "session_id": "s1",
+            "action_type": "account.funds.transfer",
+            "parameters": {"amount": 100000},
+            "use_case": "customer_service",
+        },
+        headers={**_agent_headers(), "X-Kavach-Mandate": "not-a-real-token~~garbage"},
+    )
+    # A malformed token must be handled gracefully (no 500) and must never be
+    # treated as a verified mandate (never silently "allow").
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["outcome"] != "allow"
+
+
+async def test_revoke_nonexistent_mandate_returns_404(client: httpx.AsyncClient) -> None:
+    resp = await client.post(
+        "/v1/mandates/does-not-exist/revoke",
+        json={"revoked_by": "op-1", "reason": "x"},
+        headers=_operator_headers(),
+    )
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/problem+json")
+    assert resp.json()["code"] == "not_found"
+
+
+async def test_get_nonexistent_mandate_returns_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/v1/mandates/does-not-exist", headers=_operator_headers())
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "not_found"
+
+
+async def test_timeline_is_tenant_isolated(client: httpx.AsyncClient) -> None:
+    # Record an action in tenant bank-1.
+    recorded = await client.post(
+        "/v1/agents/agent-1/actions",
+        json={"session_id": "s1", "action_type": "kyc.x", "parameters": {}},
+        headers=_agent_headers(),
+    )
+    assert recorded.status_code == 201
+
+    # A different tenant must not see bank-1's events.
+    other = await client.get(
+        "/v1/agents/agent-1/timeline", headers=_operator_headers_tenant("bank-2")
+    )
+    assert other.status_code == 200
+    assert other.json()["items"] == []
+
+    # The owning tenant still sees them.
+    same = await client.get("/v1/agents/agent-1/timeline", headers=_operator_headers())
+    assert len(same.json()["items"]) == 1
+
+
+async def test_step_up_queue_lists_pending(client: httpx.AsyncClient) -> None:
+    created = await client.post(
+        "/v1/agents/agent-1/decisions",
+        json={
+            "session_id": "s1",
+            "action_type": "account.funds.transfer",
+            "parameters": {"amount": 100000},
+            "use_case": "customer_service",
+        },
+        headers=_agent_headers(),
+    )
+    decision_id = created.json()["decision_id"]
+
+    queue = await client.get("/v1/step-ups", headers=_operator_headers())
+    assert queue.status_code == 200
+    ids = [item["decision_id"] for item in queue.json()["items"]]
+    assert decision_id in ids
+
+
+async def test_resolve_nonexistent_step_up_returns_404(client: httpx.AsyncClient) -> None:
+    resp = await client.post(
+        "/v1/decisions/no-such-decision/step-up/resolve",
+        json={"resolution": "approve", "operator_id": "op-1"},
+        headers=_operator_headers(),
+    )
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "not_found"
+
+
+async def test_trust_404_when_no_assessment(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/v1/agents/ghost/trust", headers=_operator_headers())
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "not_found"
+
+
+async def test_anomaly_severity_defaults_to_none(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/v1/agents/agent-1/anomalies", headers=_operator_headers())
+    assert resp.status_code == 200
+    assert resp.json() == {"agent_id": "agent-1", "severity": "none"}
+
+
+async def test_agent_metrics_self_scoped(client: httpx.AsyncClient) -> None:
+    ok = await client.get("/v1/agents/agent-1/metrics", headers=_agent_headers())
+    assert ok.status_code == 200
+    assert ok.json()["anomaly_severity"] == "none"
+
+    # An agent cannot read another agent's metrics.
+    forbidden = await client.get("/v1/agents/someone-else/metrics", headers=_agent_headers())
+    assert forbidden.status_code == 403
+
+
 async def test_audit_export_via_api(client: httpx.AsyncClient) -> None:
     await client.post(
         "/v1/agents/agent-1/actions",

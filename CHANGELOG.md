@@ -31,6 +31,27 @@ once the first stable release lands.
   verifies bit-for-bit as before.
 - **Swarm scorecard** runner at `kavach/testing/swarm.py`.
 
+### Fixed
+
+- Duplicate mandate issuance now returns `409 mandate_already_exists`
+  (RFC 7807) instead of surfacing a database integrity error as `500`.
+
+### Tested — Phase 1 hardening
+
+- AP2 SD-JWT verifier unhappy/edge matrix at parity with the fake verifier:
+  expired, wrong agent, scope mismatch, revoked, wrong nonce, amount over
+  range, disallowed payee, and malformed chains all fail closed.
+- Real Postgres `@pytest.mark.integration` suite exercising full issue →
+  duplicate-409 → decide and revoke → deny flows against the production
+  database target (not just in-memory SQLite).
+- API edge cases: malformed `X-Kavach-Mandate` header (never trusted, no
+  `500`), tenant-isolated timelines, revoke/get on unknown mandates (`404`),
+  step-up queue, unknown step-up resolve (`404`), trust `404`, and agent
+  self-scoped metrics.
+- Policy-engine mandate paths (originator-kind gating, constraint
+  satisfaction and violation, payee fallback, unsupported/typed operators)
+  and direct attenuation coverage (now 100%). Suite coverage ≥ 85%.
+
 ### Added — W01-S03 Working Prototype
 
 - **ADRs 0015–0017** — Pramana SDK packaging and AGPL posture (Protocol-

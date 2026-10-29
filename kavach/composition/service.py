@@ -196,6 +196,9 @@ class SubstrateService:
     async def issue_mandate(self, *, tenant_id: str, mandate: Mandate) -> MandateIssued:
         if self._mandate_verifier is None:
             raise RuntimeError("Mandate verifier is not configured.")
+        async with session_scope(self._session_factory) as session:
+            if await session.get(MandateRow, (tenant_id, mandate.mandate_id)) is not None:
+                raise ValueError(f"Mandate '{mandate.mandate_id}' already exists.")
         if isinstance(self._mandate_verifier, AP2MandateVerifier):
             try:
                 token = self._mandate_verifier.issue_chain(mandate)
