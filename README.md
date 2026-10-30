@@ -104,6 +104,10 @@ flowchart TB
 | `audit` | HMAC-SHA256 hash-chained evidence, signed evidence-pack export/verify | Implemented |
 | `policy` | Declarative rule engine, graduated step-up, `PolicyRuleProvider` extension point | Implemented |
 | `sdk_bridge` | Pramana credential/delegation verification + offline fake | Implemented |
+| `mandate` | Signed mandate issuance/verification, strict-subset attenuation, AP2 SD-JWT adapter, policy integration ([ADR-0018](docs/adr/0018-signed-mandates-and-policy-integration.md)) | Implemented |
+| `monitor` | Per-agent baselines + anomaly detectors (rate / outcome-drift / scope-expansion / confidence-drop); policy-readable severity ([ADR-0019](docs/adr/0019-monitor-capability-and-anomaly-feedback-loop.md)) | Implemented |
+| `egress` | `EgressChannel` Protocol + webhook channel over the transactional outbox | Implemented |
+| `notify` | `NotificationChannel` Protocol for step-up alerts (no-op default; Slack/PagerDuty/email planned) | Scaffolded |
 | `composition` | `build_substrate` DI wiring, event bus, substrate service, worker | Implemented |
 | `query` | Read-side projections (timeline, trust, decision log, step-up queue) | Implemented |
 | `enrichment`, `dpi` | Context enrichment, India DPI adapters | Planned |
@@ -229,7 +233,7 @@ kavach-platform/
 │   ├── server.py  worker.py  client.py  # Entrypoints + partner reference client
 ├── migrations/                  # Alembic baseline schema
 ├── docs/
-│   ├── adr/                     # 17 Architecture Decision Records
+│   ├── adr/                     # 19 Architecture Decision Records
 │   ├── api/openapi.yaml         # Frozen /v1 contract
 │   ├── compliance/              # EU + India regulatory mappings
 │   ├── security/                # Whitepaper, threat model, DPA template
@@ -277,10 +281,11 @@ the perimeter.
 
 ## Architecture Decision Records
 
-17 ADRs document every foundational decision — see the
+19 ADRs document every foundational decision — see the
 [ADR index](docs/adr/README.md). ADRs 0001–0014 establish the substrate and
 positioning; 0015–0017 cover the prototype (Pramana packaging, the API
-contract, on-prem deployment).
+contract, on-prem deployment); 0018–0019 add signed mandates and the monitor
+capability.
 
 ---
 

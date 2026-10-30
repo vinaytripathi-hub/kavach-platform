@@ -1,6 +1,6 @@
 # @aurvia/kavach
 
-TypeScript SDK for the [Kavach Platform](https://github.com/vinaysflow/kavach-platform) `/v1` API — agent accountability for Indian BFSI.
+TypeScript SDK for the [Kavach Platform](https://github.com/vinaytripathi-hub/kavach-platform) `/v1` API — agent accountability for Indian BFSI.
 
 Method names mirror the reference Python client (`kavach/client.py`) 1:1, camelCased, and a contract test keeps the two SDKs in lockstep. Types under `src/types.ts` are generated from the frozen `docs/api/openapi.yaml`.
 

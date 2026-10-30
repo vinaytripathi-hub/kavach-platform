@@ -17,7 +17,7 @@ Include:
 
 PGP key for encrypted reports:
 - Fingerprint: `6CCE4C0CF8685C7F54F16ACFA436F76F7A323EE4`
-- Available at: https://github.com/vinaysflow.gpg
+- Available at: https://github.com/vinaytripathi-hub.gpg
 
 We aim to:
 - Acknowledge receipt within 72 hours.

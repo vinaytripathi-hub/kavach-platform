@@ -140,8 +140,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vinaysflow/kavach-platform"
-Repository = "https://github.com/vinaysflow/kavach-platform"
+Homepage = "https://github.com/vinaytripathi-hub/kavach-platform"
+Repository = "https://github.com/vinaytripathi-hub/kavach-platform"
 
 # ============================================================================
 # Build system (hatchling) — wheel packaging

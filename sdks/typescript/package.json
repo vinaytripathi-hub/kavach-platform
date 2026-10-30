@@ -23,7 +23,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vinaysflow/kavach-platform.git",
+    "url": "git+https://github.com/vinaytripathi-hub/kavach-platform.git",
     "directory": "sdks/typescript"
   },
   "scripts": {
