@@ -95,11 +95,10 @@ dependencies = [
 pramana = [
     "aurvia-pramana>=0.3.0,<1.0.0",
 ]
-# Google's AP2 SDK is not on PyPI. This extra installs the commit Kavach's
-# SD-JWT verifier is tested against. It pins cryptography 46 and pytest 9.
-ap2 = [
-    "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43",
-]
+# Google's AP2 SDK is not on PyPI, so it cannot ship as an extra (PyPI
+# forbids direct-URL dependencies in published metadata). To exercise the
+# AP2 SD-JWT adapter, install the pinned commit manually:
+#   pip install "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43"
 # The MCP server (kavach.experiences.mcp_server) uses the official Model
 # Context Protocol SDK. Required only to run or test the MCP experience.
 mcp = [
@@ -149,10 +148,6 @@ Repository = "https://github.com/vinaytripathi-hub/kavach-platform"
 
 [tool.hatch.build.targets.wheel]
 packages = ["kavach"]
-
-# The optional [ap2] extra references the AP2 SDK by git URL (not on PyPI).
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.version]
 path = "kavach/__init__.py"
