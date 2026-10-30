@@ -31,6 +31,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          # No uv.lock in this repo; cache on the manifest instead.
+          cache-dependency-glob: pyproject.toml
 
       - name: Install Python 3.12
         run: uv python install 3.12
@@ -39,7 +41,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,ap2,mcp]"
+          uv pip install -e ".[dev,mcp]"
 
       - name: Ruff (lint)
         run: |
@@ -70,6 +72,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          # No uv.lock in this repo; cache on the manifest instead.
+          cache-dependency-glob: pyproject.toml
 
       - name: Install Python 3.12
         run: uv python install 3.12
@@ -78,7 +82,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,ap2,mcp]"
+          uv pip install -e ".[dev,mcp]"
 
       - name: Run unit tests with coverage
         run: |
@@ -125,6 +129,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          # No uv.lock in this repo; cache on the manifest instead.
+          cache-dependency-glob: pyproject.toml
 
       - name: Install Python 3.12
         run: uv python install 3.12
@@ -133,7 +139,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,ap2,mcp]"
+          uv pip install -e ".[dev,mcp]"
 
       - name: Run integration tests
         env:
@@ -160,6 +166,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          # No uv.lock in this repo; cache on the manifest instead.
+          cache-dependency-glob: pyproject.toml
 
       - name: Install pip-audit
         run: |
@@ -186,6 +194,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          # No uv.lock in this repo; cache on the manifest instead.
+          cache-dependency-glob: pyproject.toml
 
       - name: Install Python 3.12
         run: uv python install 3.12

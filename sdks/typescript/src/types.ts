@@ -275,6 +275,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agent_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange a holder credential for a session credential */
+        post: operations["issueSessionCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate a refresh token into a new session credential */
+        post: operations["refreshSessionCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an agent principal */
+        post: operations["revokeAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/{credential_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke one session or refresh credential */
+        post: operations["revokeCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}/anomalies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current anomaly severity for an agent */
+        get: operations["listAnomalies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/anomalies/{anomaly_id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge an anomaly */
+        post: operations["acknowledgeAnomaly"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent metric snapshot used by policy */
+        get: operations["getAgentMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -293,7 +412,7 @@ export interface components {
             detail?: string;
             instance?: string;
             /** @enum {string} */
-            code: "unauthorized" | "forbidden" | "not_found" | "validation_error" | "idempotency_conflict" | "step_up_already_resolved" | "internal_error";
+            code: "unauthorized" | "forbidden" | "not_found" | "validation_error" | "step_up_already_resolved" | "mandate_already_exists" | "already_revoked" | "credential_expired" | "credential_not_yet_valid" | "agent_revoked" | "credential_revoked" | "internal_error";
         };
         EventReceipt: {
             /** Format: uuid */
@@ -546,6 +665,41 @@ export interface components {
             /** @enum {string} */
             operator: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "contains";
             value: unknown;
+        };
+        CredentialIssueRequest: {
+            /** @description Requested session TTL. Capped at 900 seconds. */
+            ttl_seconds?: number;
+        };
+        CredentialIssueResult: {
+            credential_id: string;
+            session_id: string;
+            /** @description Kavach session JWT */
+            token: string;
+            /** Format: date-time */
+            expires_at: string;
+            refresh_token: string;
+            /** Format: date-time */
+            refresh_expires_at: string;
+        };
+        RevocationRequest: {
+            revoked_by: string;
+            reason?: string;
+        };
+        AnomalySeverity: {
+            agent_id: string;
+            /** @enum {string} */
+            severity: "none" | "info" | "warn" | "critical";
+        };
+        AnomalyAckRequest: {
+            agent_id: string;
+            /** @enum {string} */
+            resolution: "true_positive" | "false_positive" | "needs_investigation";
+            operator_id: string;
+            rationale?: string;
+        };
+        AgentMetrics: {
+            agent_id: string;
+            anomaly_severity: string;
         };
         PolicyUploadResult: {
             use_case: string;
@@ -1064,6 +1218,193 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    issueSessionCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stable agent identifier (Pramana DID or registered alias) */
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Session credential minted (TTL at most 15 minutes) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialIssueResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    refreshSessionCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New session credential */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialIssueResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    revokeAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stable agent identifier (Pramana DID or registered alias) */
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Agent already revoked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revokeCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Credential revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Credential already revoked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAnomalies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stable agent identifier (Pramana DID or registered alias) */
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current severity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnomalySeverity"];
+                };
+            };
+        };
+    };
+    acknowledgeAnomaly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                anomaly_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnomalyAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Anomaly acknowledged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stable agent identifier (Pramana DID or registered alias) */
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current anomaly severity observed by the agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMetrics"];
+                };
             };
         };
     };
