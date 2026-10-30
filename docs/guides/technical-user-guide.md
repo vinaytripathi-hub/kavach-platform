@@ -522,14 +522,25 @@ Phase 1.5 ships **first-class SDKs in two languages**, plus the MCP server:
 - **MCP server** (`kavach.experiences.mcp_server`) for local and networked
   agent hosts.
 
-> **Registry release is pending.** The `aurvia-kavach` and `@aurvia/kavach`
-> packages are built and release-ready, and the publish CI exists (§8.4), but
-> the **first publish to PyPI and npm has not happened yet** — it is blocked on
-> PyPI Trusted Publishing / `NPM_TOKEN` setup and claiming the `@aurvia` npm
-> scope. The `pip install aurvia-kavach` / `npm install @aurvia/kavach`
-> commands below are the **intended** usage once published. Until then, install
-> from source as noted in each subsection (`pip install -e .` for Python, the
-> `file:` link / `scripts/smoke-sdk-node.sh` for TypeScript).
+> **Both SDKs are published and live.** `aurvia-kavach` **v0.0.1** is on PyPI
+> ([pypi.org/project/aurvia-kavach/0.0.1](https://pypi.org/project/aurvia-kavach/0.0.1/))
+> and `@aurvia/kavach` **v0.0.1** is on npm
+> ([npmjs.com/package/@aurvia/kavach/v/0.0.1](https://www.npmjs.com/package/@aurvia/kavach/v/0.0.1)).
+> Both were published from GitHub Release `v0.0.1` (§8.4): the Python
+> distribution via **PyPI Trusted Publishing (OIDC)** with **PEP 740
+> attestations**, and the TypeScript package with **npm provenance**
+> (`npm publish --provenance --access public`). Both were independently
+> verified by a **clean-room install from the live registries**: a fresh
+> Python 3.12 venv `pip install aurvia-kavach` ran the customer-service demo
+> end-to-end (health `0.0.1`, KYC `allow`, high-value transfer `step_up`,
+> operator resolution `allow`, signed mandate `m-demo-1`, and a signed
+> evidence export of 12 records with `audit_signed: true`, HMAC-SHA256), and a
+> fresh Node project `npm install @aurvia/kavach@0.0.1` ran the
+> `examples/node/minimal-agent` flow end-to-end (mandate issued → transfer
+> `step_up` → operator resolution `allow` → evidence export of 7 records with
+> an HMAC-SHA256 signature manifest → `MINIMAL AGENT FLOW PASSED`). The
+> editable / `file:` installs shown in each subsection remain available for
+> working on the SDK source.
 
 ### 8.1 Python SDK (`aurvia-kavach`)
 
@@ -539,10 +550,10 @@ package stays **`kavach`** (Stripe-style: `pip install aurvia-kavach` /
 (`requires-python = ">=3.11,<3.14"`).
 
 ```bash
-# Intended, once published to PyPI:
+# Install from PyPI:
 pip install aurvia-kavach
 
-# Today (registry release pending), install from source:
+# For local development against a checkout:
 pip install -e .
 ```
 
@@ -591,10 +602,10 @@ the Python client's `dict[str, Any]` ergonomics. It requires **Node 18+**
 (uses the global `fetch`).
 
 ```bash
-# Intended, once published to npm:
+# Install from npm:
 npm install @aurvia/kavach
 
-# Today (registry release pending), consume from source via a file: link,
+# For local development, consume from source via a file: link,
 # as examples/node/minimal-agent does:
 #   "@aurvia/kavach": "file:../../../sdks/typescript"
 ```
@@ -740,20 +751,21 @@ the workflow itself (Node 20). Steps: install → **OpenAPI types in-sync check*
 generated `src/types.ts` is stale) → `npm run typecheck` → `npm test` (the
 contract suite) → `npm run build`.
 
-**Publish workflows** (tag `v*` or a published GitHub Release; releases to the
-public registries are **pending** first-time setup):
+**Publish workflows** (tag `v*` for a dry-run, a published GitHub Release for
+the real publish). The first release, `v0.0.1`, has shipped **`aurvia-kavach`
+v0.0.1 to PyPI** and **`@aurvia/kavach` v0.0.1 to npm** through this flow:
 
 - `.github/workflows/publish-python.yml` — builds the sdist + wheel (`uv build`),
   runs a **smoke-install matrix** that installs the built wheel and imports
   `kavach` on **Python 3.11 / 3.12 / 3.13**, performs a **TestPyPI dry-run**,
   and publishes to **PyPI only on a published Release** via **Trusted
-  Publishing (OIDC)** — no long-lived tokens. Publishers must be configured on
-  PyPI/TestPyPI before the first release.
+  Publishing (OIDC)** with **PEP 740 attestations** — no long-lived tokens.
+  This published `aurvia-kavach` v0.0.1 from the `v0.0.1` Release.
 - `.github/workflows/publish-npm.yml` — typecheck + test + build, then
   `npm publish --provenance --access public` (a `--dry-run` on a tag, the real
-  publish on a Release). Requires an `NPM_TOKEN` with publish rights and the
-  claimed `@aurvia` scope; **provenance** cryptographically links the artifact
-  to the workflow run.
+  publish on a Release). **Provenance** cryptographically links the artifact
+  to the workflow run. This published `@aurvia/kavach` v0.0.1 from the same
+  `v0.0.1` Release.
 
 ---
 
@@ -845,6 +857,9 @@ rather than unit tests and are omitted from the coverage source.
 - **Phase 1 — initial guide:** architecture, run/config, `/v1` API reference,
   mandates (fake + AP2), policy, audit/Signer, MCP + Python-client
   integration, testing.
-- **Phase 1.5 — `aurvia-kavach` on PyPI + `@aurvia/kavach` TS SDK (1:1 with the
-  Python client), contract tests, Node reference agent, and publish CI
-  (registry release pending).**
+- **Phase 1.5 — `aurvia-kavach` v0.0.1 published and live on PyPI +
+  `@aurvia/kavach` v0.0.1 published and live on npm (TS SDK 1:1 with the Python
+  client), contract tests, Node reference agent, and publish CI — both packages
+  released from GitHub Release `v0.0.1` (PyPI Trusted Publishing/OIDC +
+  attestations; npm provenance) and independently clean-room verified from the
+  live registries.**

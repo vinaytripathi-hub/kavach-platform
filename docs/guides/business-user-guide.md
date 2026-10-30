@@ -291,10 +291,16 @@ Being honest about scope is a core principle of this guide.
   demonstrates the full accountability loop end-to-end (bounded signed mandate →
   high-value action → human step-up → approval → signed evidence export), and
   automated contract tests keep the two language versions provably in lockstep
-  so they never drift. *Honest status:* the packages are release-ready and can
-  be installed from the project today; the **first publish to the public package
-  registries is still pending** (it requires release credentials and claiming the
-  package names) and is imminent.
+  so they never drift. *Honest status:* both packages (version 0.0.1) are now
+  **published and available on their public package registries** — the Python
+  package and the TypeScript/Node package can each be added with a single,
+  standard one-line install, exactly as your teams would add any other
+  dependency. This was **independently verified**: each package was installed
+  fresh from its public registry into a clean environment with nothing
+  pre-installed, and the full accountability loop — including the runnable Node
+  reference agent — was then run end-to-end and confirmed to work (bounded
+  signed mandate → high-value action → human step-up → approval → signed
+  evidence export).
 
 **Coming in later phases (not yet available):**
 
@@ -350,4 +356,7 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
 - **Phase 1 — initial guide:** substrate concepts, mandate + step-up +
   signed-evidence workflows, compliance framing.
 - **Phase 1.5 — installable Python + TypeScript SDKs and a runnable Node
-  reference agent; the integration story for partner developers.**
+  reference agent are now published to their public registries and
+  independently verified (installed fresh from the public registries and run
+  through the full accountability loop end-to-end); the integration story for
+  partner developers.**

@@ -2,7 +2,7 @@
 
 _Agent accountability for Indian BFSI. Proprietary, source-available._
 
-**Last updated:** 2026-10-29 · **Latest tag:** _none yet (pre-`v0.0.1`)_
+**Last updated:** 2026-10-30 · **Latest release:** `v0.0.1`
 
 ---
 
@@ -11,7 +11,7 @@ _Agent accountability for Indian BFSI. Proprietary, source-available._
 | | |
 |---|---|
 | **Working prototype (Phase 1)** | **Shipped** — substrate, `/v1` API, Customer Service use case, operator console, on-prem Docker packaging |
-| **SDK packaging + publish (Phase 1.5)** | **Gate OPEN** — Python (`aurvia-kavach`) and TypeScript (`@aurvia/kavach`) packages build, validate, and dry-run-pack cleanly; publish workflows wired. First live release to PyPI + npm is the one remaining step (needs registry/identity setup on the current GitHub account). |
+| **SDK packaging + publish (Phase 1.5)** | **CLOSED** — `aurvia-kavach` live on PyPI and `@aurvia/kavach` live on npm (both `0.0.1`), published from CI with Trusted Publishing / provenance and verified by a clean-room install from the live registries running the full accountability loop. See [gate-closure evidence](docs/guides/phase-1.5-gate-closure.md). |
 | **Tests** | 163 collected — **159 unit/integration passing**, 2 Postgres-integration skipped (need `KAVACH_DATABASE_URL`), 2 e2e deselected from the push gate; TS SDK **15 contract tests** passing |
 | **Coverage** | **85.44%** (push gate: 70%) |
 | **ADRs** | **19** — see [`docs/adr/README.md`](docs/adr/README.md) |
@@ -35,20 +35,21 @@ FIDO agentic work ([FIDO/AATWG mapping](docs/compliance/fido-agentic-standards-m
 
 | Package | Registry | Status |
 |---|---|---|
-| `aurvia-kavach` (Python, import `kavach`) | PyPI / TestPyPI (Trusted Publishing, OIDC) | Built + `twine check` clean; **not yet published** |
-| `@aurvia/kavach` (TypeScript) | npm (`--provenance`) | Builds + packs clean; **not yet published** |
+| `aurvia-kavach` (Python, import `kavach`) | [PyPI](https://pypi.org/project/aurvia-kavach/0.0.1/) — Trusted Publishing (OIDC) + attestations | **Published `0.0.1`** |
+| `@aurvia/kavach` (TypeScript) | [npm](https://www.npmjs.com/package/@aurvia/kavach/v/0.0.1) — `--provenance` | **Published `0.0.1`** |
 
-Publish is fully CI-driven: a signed `v*` tag runs the build + smoke-install
-matrix + TestPyPI/npm dry-runs; a published GitHub Release pushes to PyPI and
-npm. See [`.github/workflows/publish-python.yml`](.github/workflows/publish-python.yml)
+```bash
+pip install aurvia-kavach        # Python 3.11–3.13, import kavach
+npm install @aurvia/kavach       # Node 18+
+```
+
+Publish is CI-driven: a signed `v*` tag runs the build + smoke-install matrix +
+TestPyPI/npm dry-runs; a published GitHub Release pushes to PyPI and npm. See
+[`.github/workflows/publish-python.yml`](.github/workflows/publish-python.yml)
 and [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml).
-
-**Remaining action to close the Phase 1.5 gate:** configure the PyPI + TestPyPI
-Trusted Publishers, the `NPM_TOKEN` secret, and the `pypi` / `testpypi` GitHub
-environments on this repository, then cut the first signed `v0.0.1` tag and
-Release.
 
 ## More
 
 Overview: [`README.md`](README.md) · Roadmap: [`docs/roadmap.md`](docs/roadmap.md) ·
-ADR index: [`docs/adr/README.md`](docs/adr/README.md)
+ADR index: [`docs/adr/README.md`](docs/adr/README.md) ·
+Phase 1.5 evidence: [`docs/guides/phase-1.5-gate-closure.md`](docs/guides/phase-1.5-gate-closure.md)
