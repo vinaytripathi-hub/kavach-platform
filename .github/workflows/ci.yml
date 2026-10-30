@@ -82,7 +82,10 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,mcp]"
+          uv pip install -e ".[dev,mcp,pramana]"
+          # AP2 is not a published extra (PyPI rejects the git URL). CI
+          # installs the pinned commit so the adapter tests actually run.
+          uv pip install "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43"
 
       - name: Run unit tests with coverage
         run: |
@@ -139,7 +142,8 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,mcp]"
+          uv pip install -e ".[dev,mcp,pramana]"
+          uv pip install "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43"
 
       - name: Run integration tests
         env:
