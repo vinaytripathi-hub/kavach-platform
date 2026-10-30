@@ -92,27 +92,20 @@ def test_pytest_parametrize_works(operation: str, expected: object) -> None:
 
 
 def test_pramana_import_resolves() -> None:
-    """The aurvia-pramana distribution is installed and import pramana resolves.
+    """When aurvia-pramana is installed, ``import pramana`` resolves at 0.3.0.
 
-    This smoke test pins the substrate's foundational dependency:
-    - `import pramana` must succeed (no ModuleNotFoundError).
-    - `pramana.__version__` must be present and match the expected version.
-    - `pramana.__file__` must resolve to a real path on disk.
+    The package is an optional extra and is not on a public index yet
+    (ADR-0015), so a clean CI install skips this check. A local editable
+    install or a vendored wheel still has to match 0.3.0, and
+    ``pramana.__file__`` has to point at a real file.
 
-    During development (editable install from ../Pramana-protocol/sdk/python),
-    the resolution path is under the local Pramana checkout. In CI and
-    production, the resolution path is under .venv/lib/.../site-packages/.
-    Either is valid as long as the version matches what we expect.
-
-    Per ADR-0003 (W01-S02 Block C), the import name `pramana` is decoupled
-    from the PyPI distribution name `aurvia-pramana`. This test verifies
-    the import name; the distribution name is verified by `pyproject.toml`
-    constraint plus successful resolution by the package manager.
+    Per ADR-0003, the import name ``pramana`` is decoupled from the
+    distribution name ``aurvia-pramana``.
     """
-    import pramana
-
-    # The import succeeded if we got here.
-    assert pramana is not None
+    pramana = pytest.importorskip(
+        "pramana",
+        reason="aurvia-pramana is optional and not on a public index (ADR-0015)",
+    )
 
     # Version is present and is the expected 0.3.0-line.
     assert hasattr(pramana, "__version__"), (

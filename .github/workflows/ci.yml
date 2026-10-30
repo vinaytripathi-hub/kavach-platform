@@ -82,9 +82,11 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,mcp,pramana]"
+          uv pip install -e ".[dev,mcp]"
           # AP2 is not a published extra (PyPI rejects the git URL). CI
           # installs the pinned commit so the adapter tests actually run.
+          # aurvia-pramana stays off this install: it is not on a public
+          # index yet (ADR-0015), and the import smoke test skips without it.
           uv pip install "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43"
 
       - name: Run unit tests with coverage
@@ -142,8 +144,7 @@ jobs:
         run: |
           uv venv --python 3.12 .venv
           source .venv/bin/activate
-          uv pip install -e ".[dev,mcp,pramana]"
-          uv pip install "ap2 @ git+https://github.com/google-agentic-commerce/AP2.git@e1ea56db72a6385bce3e5c1112b3a56ce60acb43"
+          uv pip install -e ".[dev,mcp]"
 
       - name: Run integration tests
         env:
