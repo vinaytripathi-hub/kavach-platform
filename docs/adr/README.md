@@ -72,17 +72,18 @@ metadata is updated but its file remains and its number is preserved.
 | 0017 | Accepted | On-prem deployment posture (Docker Compose first) |
 | 0018 | Accepted | Signed mandates and policy integration (NIST tenet 06) |
 | 0019 | Accepted | Monitor capability and anomaly feedback loop (NIST tenet 09) |
+| 0020 | Accepted | Revocation and credential lifetime (NIST tenet 04) |
 
 ADRs 0001–0014 cover the foundational and advanced architectural
 commitments for Kavach Platform's substrate and product positioning,
 produced in W01-S02 across Blocks C and D. ADRs 0015–0017 were added
 in the W01-S03+ working-prototype build: Pramana SDK packaging, the
 external HTTP API contract, and the on-prem deployment posture. ADRs
-0018 and 0019 address the two NIST agentic-IAM design tenets
-(27 October 2026) that are not yet implemented in the substrate:
-signed mandates (tenet 06) and continuous monitoring with anomaly
-detection (tenet 09). Subsequent ADRs will be added as new
-architectural decisions arise.
+0018 and 0019 address NIST agentic-IAM tenets 06 (signed mandates)
+and 09 (continuous monitoring). ADR-0020 addresses tenet 04's
+agent-side half: short-lived session credentials, `exp`/`nbf`
+enforcement, and agent/credential revocation. Subsequent ADRs will
+be added as new architectural decisions arise.
 
 ## Adding a new ADR
 
