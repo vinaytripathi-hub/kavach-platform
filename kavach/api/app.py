@@ -20,8 +20,11 @@ from kavach.api.security import (
     AgentPrincipal,
     OperatorPrincipal,
     ProblemError,
+    _bearer,
     get_substrate,
+    require_admin,
     require_agent,
+    require_auditor,
     require_operator,
 )
 from kavach.capabilities.storage import session_scope
@@ -231,7 +234,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
         agent_id: str,
         request: Request,
         context: str = "customer_service",
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_auditor),
     ) -> m.TrustResponse:
         sub = get_substrate(request)
         row = await sub.service.get_trust(
@@ -252,7 +255,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
         agent_id: str,
         request: Request,
         limit: int = 50,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_auditor),
     ) -> m.TimelinePage:
         sub = get_substrate(request)
         rows = await sub.service.get_timeline(
@@ -276,7 +279,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
     async def request_audit_export(
         body: m.AuditExportRequest,
         request: Request,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_auditor),
     ) -> m.AuditExportStatus:
         sub = get_substrate(request)
         export = await sub.service.export_audit(
@@ -303,7 +306,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
     async def get_audit_export(
         export_id: str,
         request: Request,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_auditor),
     ) -> m.AuditExportStatus:
         del principal
         status: m.AuditExportStatus | None = request.app.state.audit_exports.get(export_id)
@@ -392,11 +395,117 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
             ) from exc
         return {"mandate_id": event.mandate_id, "status": "revoked"}
 
+    @app.post("/v1/agents/{agent_id}/credentials", tags=["credentials"])
+    async def issue_credentials(
+        agent_id: str,
+        body: m.CredentialIssueRequest,
+        request: Request,
+        principal: AgentPrincipal = Depends(require_agent),
+    ) -> m.CredentialIssueResult:
+        _ensure_same_agent(principal, agent_id)
+        if principal.verified.credential_id:
+            raise ProblemError(
+                401,
+                "unauthorized",
+                "Present a holder credential, not a session credential.",
+            )
+        sub = get_substrate(request)
+        try:
+            issued = await sub.service.issue_session_credential(
+                tenant_id=principal.tenant_id,
+                agent_id=agent_id,
+                scopes=list(principal.verified.scopes),
+                ttl_seconds=body.ttl_seconds,
+            )
+        except PermissionError as exc:
+            raise ProblemError(401, "agent_revoked", "Agent is revoked.", str(exc)) from exc
+        except ValueError as exc:
+            raise ProblemError(
+                422, "validation_error", "Invalid credential request.", str(exc)
+            ) from exc
+        return m.CredentialIssueResult(
+            credential_id=issued.credential_id,
+            session_id=issued.session_id,
+            token=issued.token,
+            expires_at=issued.expires_at,
+            refresh_token=issued.refresh_token,
+            refresh_expires_at=issued.refresh_expires_at,
+        )
+
+    @app.post("/v1/credentials/refresh", tags=["credentials"])
+    async def refresh_credentials(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        tenant_id: str = Header(default="default", alias="X-Kavach-Tenant"),
+    ) -> m.CredentialIssueResult:
+        sub = get_substrate(request)
+        token = _bearer(authorization)
+        try:
+            issued = await sub.service.refresh_session_credential(
+                tenant_id=tenant_id, refresh_token=token
+            )
+        except PermissionError as exc:
+            message = str(exc)
+            code = "credential_expired" if "expired" in message else "credential_revoked"
+            raise ProblemError(401, code, message) from exc
+        except ValueError as exc:
+            raise ProblemError(401, "unauthorized", "Refresh token is invalid.", str(exc)) from exc
+        return m.CredentialIssueResult(
+            credential_id=issued.credential_id,
+            session_id=issued.session_id,
+            token=issued.token,
+            expires_at=issued.expires_at,
+            refresh_token=issued.refresh_token,
+            refresh_expires_at=issued.refresh_expires_at,
+        )
+
+    @app.post("/v1/agents/{agent_id}/revoke", tags=["admin"])
+    async def revoke_agent(
+        agent_id: str,
+        body: m.RevocationRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_admin),
+    ) -> dict[str, str]:
+        sub = get_substrate(request)
+        try:
+            event = await sub.service.revoke_agent(
+                tenant_id=principal.tenant_id,
+                agent_id=agent_id,
+                revoked_by=body.revoked_by,
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise ProblemError(409, "already_revoked", "Agent already revoked.", str(exc)) from exc
+        return {"agent_id": event.agent_id, "status": "revoked"}
+
+    @app.post("/v1/credentials/{credential_id}/revoke", tags=["admin"])
+    async def revoke_credential(
+        credential_id: str,
+        body: m.RevocationRequest,
+        request: Request,
+        principal: OperatorPrincipal = Depends(require_admin),
+    ) -> dict[str, str]:
+        sub = get_substrate(request)
+        try:
+            event = await sub.service.revoke_credential(
+                tenant_id=principal.tenant_id,
+                credential_id=credential_id,
+                revoked_by=body.revoked_by,
+                reason=body.reason,
+            )
+        except KeyError as exc:
+            raise ProblemError(404, "not_found", "Credential not found.", str(exc)) from exc
+        except ValueError as exc:
+            raise ProblemError(
+                409, "already_revoked", "Credential already revoked.", str(exc)
+            ) from exc
+        return {"credential_id": event.credential_id, "status": "revoked"}
+
     @app.get("/v1/agents/{agent_id}/anomalies", tags=["monitor"])
     async def list_anomalies(
         agent_id: str,
         request: Request,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_auditor),
     ) -> dict[str, str]:
         sub = get_substrate(request)
         severity = await sub.service.current_anomaly_severity(
@@ -441,7 +550,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
     async def create_subscription(
         body: m.WebhookSubscriptionRequest,
         request: Request,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_admin),
     ) -> m.WebhookSubscription:
         sub = get_substrate(request)
         row = await sub.service.create_webhook_subscription(
@@ -462,7 +571,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
     async def register_agent(
         body: m.AgentRegistrationRequest,
         request: Request,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_admin),
     ) -> m.AgentRegistration:
         sub = get_substrate(request)
         row = await sub.service.register_agent(
@@ -483,7 +592,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
     async def upload_policy(
         body: m.PolicyUploadRequest,
         request: Request,
-        principal: OperatorPrincipal = Depends(require_operator),
+        principal: OperatorPrincipal = Depends(require_admin),
     ) -> m.PolicyUploadResult:
         del principal
         from kavach.capabilities.policy import PolicyRuleSet

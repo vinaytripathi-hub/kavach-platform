@@ -11,10 +11,14 @@ info:
     adds only transport concerns (pagination, problem+json errors,
     idempotency).
 
-    Two principal classes authenticate (ADR-0016):
-      - Agents present a Pramana-issued credential (bearer VP/JWT),
-        verified by the sdk_bridge capability (ADR-0015).
-      - Operators/admins present a Kavach-issued JWT.
+    Two principal classes authenticate (ADR-0016, amended by ADR-0021
+    for operator identity only):
+      - Agents present a holder credential or a Kavach session JWT
+        (`bearerAuth`). Session credentials are capped at 15 minutes
+        (ADR-0020).
+      - Operators, auditors, and admins present an OIDC access token
+        (`oidcAuth`) issued by the deployment IdP (Keycloak in the
+        reference Compose stack). There is no static operator secret.
 
     Errors follow RFC 7807 (application/problem+json). State-changing
     POSTs accept an Idempotency-Key header and deduplicate per tenant.
@@ -46,7 +50,13 @@ tags:
   - name: webhooks
     description: Outbound event subscriptions
   - name: admin
-    description: Agent registration and policy management
+    description: Agent registration, policy management, and revocation
+  - name: mandates
+    description: Signed, bounded authorizations (ADR-0018)
+  - name: credentials
+    description: Short-lived session credentials (ADR-0020)
+  - name: monitor
+    description: Anomaly and metric reads (ADR-0019)
   - name: system
     description: Health and readiness
 
@@ -126,6 +136,8 @@ paths:
       tags: [decisions]
       summary: Operator resolves a pending step-up decision
       operationId: resolveStepUp
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/DecisionId"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -156,6 +168,8 @@ paths:
       tags: [decisions]
       summary: List pending step-up decisions (operator console)
       operationId: listStepUps
+      security:
+        - oidcAuth: []
       responses:
         "200":
           description: Pending step-ups for the tenant
@@ -175,6 +189,8 @@ paths:
         with its own data sufficiency (ADR-0013), plus an optional
         composed scalar if a composition spec is supplied.
       operationId: getTrust
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/AgentId"
         - name: context
@@ -197,6 +213,8 @@ paths:
       tags: [trust]
       summary: Paginated activity timeline for an agent
       operationId: getTimeline
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/AgentId"
         - $ref: "#/components/parameters/Limit"
@@ -219,6 +237,8 @@ paths:
         records (ADR-0012) with a detached signature manifest. Maps to
         EU AI Act Articles 12 (logging) and 13 (transparency).
       operationId: requestAuditExport
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -242,6 +262,8 @@ paths:
       tags: [audit]
       summary: Poll and download an evidence pack
       operationId: getAuditExport
+      security:
+        - oidcAuth: []
       parameters:
         - name: export_id
           in: path
@@ -262,6 +284,8 @@ paths:
       tags: [webhooks]
       summary: Subscribe a partner system to substrate events
       operationId: createWebhookSubscription
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -285,6 +309,8 @@ paths:
       tags: [admin]
       summary: Register an agent
       operationId: registerAgent
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -309,6 +335,8 @@ paths:
       tags: [admin]
       summary: Upload a policy rule set
       operationId: uploadPolicy
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -333,6 +361,8 @@ paths:
       tags: [mandates]
       summary: Issue a signed mandate
       operationId: issueMandate
+      security:
+        - oidcAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -379,6 +409,8 @@ paths:
       tags: [mandates]
       summary: Read a stored mandate
       operationId: getMandate
+      security:
+        - oidcAuth: []
       parameters:
         - name: mandate_id
           in: path
@@ -398,6 +430,8 @@ paths:
       tags: [mandates]
       summary: Revoke a mandate before expiry
       operationId: revokeMandate
+      security:
+        - oidcAuth: []
       parameters:
         - name: mandate_id
           in: path
@@ -420,6 +454,152 @@ paths:
         "409":
           description: Mandate already revoked
 
+  /agents/{agent_id}/credentials:
+    post:
+      tags: [credentials]
+      summary: Exchange a holder credential for a session credential
+      operationId: issueSessionCredential
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CredentialIssueRequest"
+      responses:
+        "200":
+          description: Session credential minted (TTL at most 15 minutes)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssueResult"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /credentials/refresh:
+    post:
+      tags: [credentials]
+      summary: Rotate a refresh token into a new session credential
+      operationId: refreshSessionCredential
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: New session credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialIssueResult"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /agents/{agent_id}/revoke:
+    post:
+      tags: [admin]
+      summary: Revoke an agent principal
+      operationId: revokeAgent
+      security:
+        - oidcAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevocationRequest"
+      responses:
+        "200":
+          description: Agent revoked
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Agent already revoked
+
+  /credentials/{credential_id}/revoke:
+    post:
+      tags: [admin]
+      summary: Revoke one session or refresh credential
+      operationId: revokeCredential
+      security:
+        - oidcAuth: []
+      parameters:
+        - name: credential_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevocationRequest"
+      responses:
+        "200":
+          description: Credential revoked
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Credential already revoked
+
+  /agents/{agent_id}/anomalies:
+    get:
+      tags: [monitor]
+      summary: Current anomaly severity for an agent
+      operationId: listAnomalies
+      security:
+        - oidcAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Current severity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnomalySeverity"
+
+  /anomalies/{anomaly_id}/acknowledge:
+    post:
+      tags: [monitor]
+      summary: Acknowledge an anomaly
+      operationId: acknowledgeAnomaly
+      security:
+        - oidcAuth: []
+      parameters:
+        - name: anomaly_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnomalyAckRequest"
+      responses:
+        "200":
+          description: Anomaly acknowledged
+
+  /agents/{agent_id}/metrics:
+    get:
+      tags: [monitor]
+      summary: Agent metric snapshot used by policy
+      operationId: getAgentMetrics
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Current anomaly severity observed by the agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMetrics"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -427,8 +607,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        Agent principals present a Pramana-issued credential (VP/JWT).
-        Operator/admin principals present a Kavach-issued JWT.
+        Agent principals present a holder credential or a Kavach
+        session JWT (ADR-0020). Operator, auditor, and admin routes
+        use oidcAuth instead.
+    oidcAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        OIDC access token (ADR-0021). Roles `operator`, `auditor`, and
+        `admin`. The `tenant` claim must match `X-Kavach-Tenant`.
 
   parameters:
     AgentId:
@@ -513,8 +701,13 @@ components:
             - forbidden
             - not_found
             - validation_error
-            - idempotency_conflict
             - step_up_already_resolved
+            - mandate_already_exists
+            - already_revoked
+            - credential_expired
+            - credential_not_yet_valid
+            - agent_revoked
+            - credential_revoked
             - internal_error
 
     EventReceipt:
@@ -836,6 +1029,58 @@ components:
         attribute: { type: string, example: "parameters.amount" }
         operator: { type: string, enum: [eq, ne, gt, gte, lt, lte, in, contains] }
         value: {}
+
+    CredentialIssueRequest:
+      type: object
+      properties:
+        ttl_seconds:
+          type: integer
+          minimum: 1
+          maximum: 900
+          description: Requested session TTL. Capped at 900 seconds.
+
+    CredentialIssueResult:
+      type: object
+      required: [credential_id, session_id, token, expires_at, refresh_token, refresh_expires_at]
+      properties:
+        credential_id: { type: string }
+        session_id: { type: string }
+        token: { type: string, description: "Kavach session JWT" }
+        expires_at: { type: string, format: date-time }
+        refresh_token: { type: string }
+        refresh_expires_at: { type: string, format: date-time }
+
+    RevocationRequest:
+      type: object
+      required: [revoked_by]
+      properties:
+        revoked_by: { type: string }
+        reason: { type: string }
+
+    AnomalySeverity:
+      type: object
+      required: [agent_id, severity]
+      properties:
+        agent_id: { type: string }
+        severity: { type: string, enum: [none, info, warn, critical] }
+
+    AnomalyAckRequest:
+      type: object
+      required: [agent_id, resolution, operator_id]
+      properties:
+        agent_id: { type: string }
+        resolution:
+          type: string
+          enum: [true_positive, false_positive, needs_investigation]
+        operator_id: { type: string }
+        rationale: { type: string }
+
+    AgentMetrics:
+      type: object
+      required: [agent_id, anomaly_severity]
+      properties:
+        agent_id: { type: string }
+        anomaly_severity: { type: string }
 
     PolicyUploadResult:
       type: object

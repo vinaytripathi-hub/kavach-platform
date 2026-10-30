@@ -134,3 +134,62 @@ class MandateRevocationRow(Base):
     revoked_by: Mapped[str] = mapped_column(String(200))
     reason: Mapped[str] = mapped_column(Text, default="")
     revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgentCredentialRow(Base):
+    """A minted session or refresh credential (ADR-0020)."""
+
+    __tablename__ = "agent_credentials"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    credential_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(200), index=True)
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    scopes: Mapped[list[str]] = mapped_column(JSON)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgentRevocationRow(Base):
+    """Revocation of an entire agent principal (ADR-0020)."""
+
+    __tablename__ = "agent_revocations"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    revoked_by: Mapped[str] = mapped_column(String(200))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CredentialRevocationRow(Base):
+    """Revocation of one credential ``jti`` (ADR-0020)."""
+
+    __tablename__ = "credential_revocations"
+
+    tenant_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    credential_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(200))
+    revoked_by: Mapped[str] = mapped_column(String(200))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SignalOutboxRow(Base):
+    """Pending CAEP/SSF delivery, written in the publishing transaction."""
+
+    __tablename__ = "signal_outbox"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    event_id: Mapped[str] = mapped_column(String(36), index=True)
+    event_type: Mapped[str] = mapped_column(String(100))
+    tenant_id: Mapped[str] = mapped_column(String(100), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

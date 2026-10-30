@@ -12,9 +12,22 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PORT="${KAVACH_SMOKE_PORT:-8077}"
-OPERATOR_TOKEN="operator-dev-token"
 DBFILE="$(mktemp -t kavach-sdk-smoke.XXXXXX).sqlite"
 PYTHON="${PYTHON:-.venv/bin/python}"
+
+# Mint an operator access token and publish the matching JWKS so the API
+# process (a separate interpreter) can verify it. ADR-0021.
+eval "$("$PYTHON" - <<'PY'
+import shlex
+from kavach.testing.oidc import AUDIENCE, ISSUER, jwks_json, mint_operator_token
+
+token = mint_operator_token(role="admin", tenant="bank-1")
+print(f"export KAVACH_OIDC_ISSUER={shlex.quote(ISSUER)}")
+print(f"export KAVACH_OIDC_AUDIENCE={shlex.quote(AUDIENCE)}")
+print(f"export KAVACH_OIDC_JWKS={shlex.quote(jwks_json())}")
+print(f"export OPERATOR_TOKEN={shlex.quote(token)}")
+PY
+)"
 
 export KAVACH_DATABASE_URL="sqlite+aiosqlite:///${DBFILE}"
 export KAVACH_OPERATOR_TOKEN="$OPERATOR_TOKEN"

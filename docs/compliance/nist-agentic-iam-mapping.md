@@ -27,7 +27,7 @@ Status legend: **Implemented** (in the prototype) · **Partial**
 | 01 | **Distinct Agent Identification** — unique, cryptographically verifiable agent identity, distinguishable from humans and service accounts; distinct IAM lifecycle | Agents authenticate via a Pramana credential verified by the `sdk_bridge`; the API models agents and operators as separate principal classes and enforces that a token can only act as its own `agent_id` | [`VerifiedAgent`](../../kavach/capabilities/sdk_bridge/contracts.py); [`AgentPrincipal` / `OperatorPrincipal`](../../kavach/api/security.py); `_ensure_same_agent` in [`app.py`](../../kavach/api/app.py) | Partial (cryptographic distinctness requires the Pramana adapter; the prototype default is a non-cryptographic fake verifier) |
 | 02 | **Agent Linking, Delegation & Attenuation** — originator and agent cryptographically linked throughout execution; downstream scopes attenuate | `verify_delegation_chain` returns an `effective_scope` consumed by `VerifiedAgent.authorizes()`; every decision event carries `decided_by` and the delegation context; audit chain preserves linkage across the sequence | [`LocalPramanaAdapter`](../../kavach/capabilities/sdk_bridge/_internal/pramana_adapter.py); [`DecisionEmitted.decided_by`](../../kavach/events/schemas/decision_primitives.py); [ADR-0012](../adr/0012-decision-events-with-evidence-and-reasoning.md) | Partial (attenuation is a Pramana property; sub-agent chains and anonymous/pseudonymous consumer flows not yet exercised in Kavach) |
 | 03 | **Least & Zero Standing Privilege** — minimum scope per task; separation of duties; no persistent rights when idle | Policy engine is **default-deny** per rule set; action-type glob + scope check gate every decision; action schema is provisioned, not discovered at runtime | [`PolicyRuleSet.default_effect`](../../kavach/capabilities/policy/_internal/rules.py); [`PolicyEngine.evaluate`](../../kavach/capabilities/policy/_internal/engine.py); [`VerifiedAgent.authorizes`](../../kavach/capabilities/sdk_bridge/contracts.py) | Partial (no "zero standing privilege when idle" model; no formal Separation-of-Duties primitive; scopes persist for credential lifetime) |
-| 04 | **Short-Lived, Dynamic & Revocable Authorization** — JIT, time-bounded, audience-specific; continuous runtime verification; no long-lived bearer tokens | Agent credential is verified on every request against `expected_audience`; idempotency keys dedupe replays; operator and agent principals are separated and tenant-scoped | [`require_agent`](../../kavach/api/security.py); [`_idempotent`](../../kavach/api/app.py); [`SubstrateConfig.expected_audience`](../../kavach/composition/config.py) | Weak (no TTL enforcement, no revocation endpoint, no context-drift triggers; the operator token is a static shared secret in the prototype) |
+| 04 | **Short-Lived, Dynamic & Revocable Authorization** — JIT, time-bounded, audience-specific; continuous runtime verification; no long-lived bearer tokens | Kavach session JWTs are capped at 15 minutes and checked for `nbf`/`exp` before policy effect. Agent, credential, and mandate revocation are authoritative rows checked on the next request. Operators authenticate with Keycloak OIDC (roles operator/auditor/admin), not a shared secret. DPoP is deferred (ADR-0020). | [`mint_session`](../../kavach/capabilities/credentials/__init__.py); [`require_agent`](../../kavach/api/security.py); [`OperatorIdentityVerifier`](../../kavach/identity/oidc.py); [ADR-0020](../adr/0020-revocation-and-credential-lifetime.md); [ADR-0021](../adr/0021-operator-identity.md) | Implemented. Tests: `test_revoked_agent_denied_on_next_request`, `test_revoked_credential_denied_on_next_request`, `test_expired_session_is_401_problem`, `test_not_yet_valid_session_is_401_problem`, `test_caep_event_received_within_one_second`, `test_mandate_not_before_fails_closed` |
 | 05 | **Human-in-the-Loop Triggers** — risk-threshold-driven escalation with sufficient context; consent-fatigue aware | Policy engine returns `step_up` for high-impact actions; `StepUpRequested` carries reason + `required_role`; operators resolve with `StepUpResolved` whose `decided_by: operator:<id>` is signed into the audit chain | [`PolicyEngine.evaluate`](../../kavach/capabilities/policy/_internal/engine.py); [`StepUpRequested` / `StepUpResolved`](../../kavach/events/schemas/stepup.py); `POST /v1/decisions/{id}/step-up/resolve`; step-up queue projection | **Implemented** (consent-fatigue safeguards — escalation batching, context summaries, rate caps — not yet modeled) |
 | 06 | **Mandates and Constraints** — cryptographically signed mandate statements defining intended outcomes and constraints; verifiable downstream | `Mandate` verified by `MandateVerifier` (fake HMAC or AP2 payment mandate), required per rule, recorded as `MandateIssued` / `MandatePresented` / `MandateRevoked`, and referenced by digest on the decision | [`kavach/capabilities/mandate`](../../kavach/capabilities/mandate/); [ADR-0018](../adr/0018-signed-mandates-and-policy-integration.md) | **Implemented** |
 | 07 | **Architectural Separation of Policy from Reasoning** — policy enforcement is architecturally outside the LLM; prompts cannot expand permissions | Three-layer architecture: the LLM/agent is outside the substrate and calls `POST /v1/agents/{id}/decisions`; `PolicyEngine` is a pure deterministic evaluator with no model in the loop; agent-presented tokens are verified out-of-band | [ADR-0001](../adr/0001-three-layer-architecture.md); [ADR-0007](../adr/0007-modular-capability-architecture.md); [`PolicyEngine`](../../kavach/capabilities/policy/_internal/engine.py); [`require_agent`](../../kavach/api/security.py) | **Implemented** |
@@ -50,7 +50,7 @@ these combinations as design properties:
 - **Credential compromise** (stolen bearer token used for persistent
     50|  unauthorised access) is mitigated by 01 (distinct agent identity so
   compromise is bounded to one agent), 04 (short-lived, revocable
-  authorization — **the weakest link in the current prototype**), and
+  authorization — session TTL, revocation, and OIDC operator identity), and
   10 (every subsequent action is signed into an append-only chain, so
   the blast radius is reconstructable).
 - **Silent high-impact action** (a malfunctioning agent executes an
@@ -66,22 +66,17 @@ these combinations as design properties:
 
 Ranked by distance to a credible BFSI claim across all ten tenets:
 
-1. **Tenet 04 — Short-lived, revocable authorization.** Enforced
-   token `exp` / `nbf` at the API boundary beyond mandates, a general
-   credential revocation endpoint, and replacement of the shared
-   operator token with an IdP integration. Mandate expiry and
-   revocation (tenet 06) are in place.
-    70|2. **Tenet 03 — Zero standing privilege & Separation of Duties.**
+1. **Tenet 03 — Zero standing privilege & Separation of Duties.**
    Session-scoped task tickets that attenuate the credential; a
-    80|   declarative SoD check in `PolicyRuleSet`.
-3. **Tenets 01 / 02 — Cryptographic maturity.** Default deployments
+   declarative SoD check in `PolicyRuleSet`.
+2. **Tenets 01 / 02 — Cryptographic maturity.** Default deployments
    should run on the Pramana adapter (or an equivalent EUDIW / IdP
    adapter), not the fake verifier.
 
 Hardening already called out in [the security
 whitepaper](../security/security-whitepaper.md) also applies: HSM/KMS
-custody of the audit signing key (tenet 10), operator IdP + RBAC
-(tenets 01, 04), chain-head lock for concurrent writers (tenet 10),
+custody of the audit signing key (tenet 10), DPoP proof-of-possession
+(tenet 04, deferred in ADR-0020), chain-head lock for concurrent writers (tenet 10),
 edge TLS/mTLS and rate limiting (tenet 04 blast-radius control).
 
     90|## Industry alignment: FIDO AATWG, Google AP2, Mastercard Verifiable Intent

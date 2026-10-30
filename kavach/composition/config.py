@@ -29,7 +29,19 @@ class SubstrateConfig(BaseSettings):
     audit_signer_mode: AuditSignerMode = "hmac"
     jwt_secret: str = "dev-insecure-jwt-secret-change-me"  # noqa: S105
     expected_audience: str = "kavach"
-    operator_token: str = "operator-dev-token"  # noqa: S105
+    # Operator identity is OIDC (ADR-0021). Empty issuer fails closed.
+    oidc_issuer: str = ""
+    oidc_audience: str = "kavach"
+    oidc_jwks_url: str = ""
+    oidc_jwks: str = ""
+    oidc_tenant_claim: str = "tenant"
+    oidc_leeway_seconds: int = 30
+    # Session credentials (ADR-0020). Hard cap is 15 minutes in the minter.
+    agent_credential_ttl_seconds: int = 900
+    # CAEP/SSF receiver. Empty disables outbound signals.
+    signal_receiver_url: str = ""
+    signal_issuer: str = "https://kavach.example"
+    signal_audience: str = "kavach-ssf"
     echo_sql: bool = False
     # When true, the API creates tables on startup (convenient for the
     # SQLite demo). On-prem Postgres deployments set this false and run

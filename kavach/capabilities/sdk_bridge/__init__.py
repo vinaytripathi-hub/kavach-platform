@@ -16,15 +16,18 @@ from kavach.capabilities.sdk_bridge.contracts import CredentialVerifier, Verifie
 VerifierMode = Literal["fake", "pramana"]
 
 
-def make_verifier(mode: VerifierMode = "fake") -> CredentialVerifier:
+def make_verifier(
+    mode: VerifierMode = "fake", *, jwt_secret: bytes | None = None
+) -> CredentialVerifier:
     """Build a credential verifier for the given mode (ADR-0015).
 
     ``fake`` is the offline, deterministic verifier used by tests and
-    demos; ``pramana`` wraps the real SDK.
+    demos; ``pramana`` wraps the real SDK. ``jwt_secret`` lets the fake
+    verifier also accept Kavach session JWTs (ADR-0020).
     """
     if mode == "pramana":
         return LocalPramanaAdapter()
-    return FakeCredentialVerifier()
+    return FakeCredentialVerifier(jwt_secret=jwt_secret)
 
 
 __all__ = [

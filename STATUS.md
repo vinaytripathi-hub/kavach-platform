@@ -10,23 +10,24 @@ _Agent accountability for Indian BFSI. Proprietary, source-available._
 
 | | |
 |---|---|
+| **Phase 2a (NIST tenet 04)** | **CLOSED** — ≤15-minute session credentials, agent/credential/mandate revocation before policy effect, Keycloak OIDC (no static operator secret), CAEP/SSF signals. Gate tests in `tests/api/test_tenet04.py`. |
 | **Working prototype (Phase 1)** | **Shipped** — substrate, `/v1` API, Customer Service use case, operator console, on-prem Docker packaging |
-| **SDK packaging + publish (Phase 1.5)** | **CLOSED** — `aurvia-kavach` live on PyPI and `@aurvia/kavach` live on npm (both `0.0.1`), published from CI with Trusted Publishing / provenance and verified by a clean-room install from the live registries running the full accountability loop. See [gate-closure evidence](docs/guides/phase-1.5-gate-closure.md). |
-| **Tests** | 163 collected — **159 unit/integration passing**, 2 Postgres-integration skipped (need `KAVACH_DATABASE_URL`), 2 e2e deselected from the push gate; TS SDK **15 contract tests** passing |
-| **Coverage** | **85.44%** (push gate: 70%) |
-| **ADRs** | **19** — see [`docs/adr/README.md`](docs/adr/README.md) |
+| **SDK packaging + publish (Phase 1.5)** | **CLOSED** — `aurvia-kavach` live on PyPI and `@aurvia/kavach` live on npm (both `0.0.1`). See [gate-closure evidence](docs/guides/phase-1.5-gate-closure.md). |
+| **Tests** | **170 unit/integration passing**, 3 integration skipped (Postgres URL, live Keycloak), 2 e2e deselected from the push gate |
+| **Coverage** | **83%** (push gate: 70%; capabilities floor 80%) |
+| **ADRs** | **21** — see [`docs/adr/README.md`](docs/adr/README.md) |
 | **License** | Proprietary, source-available ([LICENSE](LICENSE), [NOTICE](NOTICE)); built on the AGPL-3.0 Pramana Protocol via its public SDK only |
 
-## NIST agentic-IAM scorecard (6 / 3 / 1)
+## NIST agentic-IAM scorecard (7 / 3 / 0)
 
 Crosswalk against the NIST 10-tenet agentic IAM model
 ([full mapping](docs/compliance/nist-agentic-iam-mapping.md)):
 
 | Disposition | Count | Tenets |
 |---|---|---|
-| **Implemented** | 6 | 05, 06, 07, 08, 09, 10 |
+| **Implemented** | 7 | 04, 05, 06, 07, 08, 09, 10 |
 | **Partial** | 3 | 01, 02, 03 |
-| **Weak** | 1 | 04 |
+| **Weak** | 0 | — |
 
 Standards alignment also tracked for AP2, Mastercard Verifiable Intent, and the
 FIDO agentic work ([FIDO/AATWG mapping](docs/compliance/fido-agentic-standards-mapping.md)).

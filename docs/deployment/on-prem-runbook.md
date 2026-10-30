@@ -14,13 +14,14 @@ deployment posture of [ADR-0017](../adr/0017-on-prem-deployment-posture.md).
 
 ## Components
 
-`docker compose` brings up four services (ADR-0017):
+`docker compose` brings up the on-prem stack (ADR-0017, ADR-0021):
 
 | Service | Image | Role |
 |---------|-------|------|
 | `db` | postgres:16 | Event log, projections, outbox (ADR-0004) |
+| `keycloak` | quay.io/keycloak/keycloak:26.0 | Operator IdP (ADR-0021). Realm `kavach` is imported on start. |
 | `api` | built from `Dockerfile` | FastAPI substrate (ADR-0016) |
-| `worker` | built from `Dockerfile` | Outbox -> webhook dispatcher (ADR-0008) |
+| `worker` | built from `Dockerfile` | Outbox -> webhook and CAEP dispatcher |
 | `console` | nginx | Operator console (static SPA) |
 
 ## Install
@@ -29,8 +30,12 @@ deployment posture of [ADR-0017](../adr/0017-on-prem-deployment-posture.md).
 # 1. Configure secrets.
 cp .env.example .env
 # Edit .env: set strong KAVACH_AUDIT_HMAC_KEY, KAVACH_JWT_SECRET,
-# KAVACH_OPERATOR_TOKEN, and POSTGRES_PASSWORD. e.g.:
+# KEYCLOAK_ADMIN_PASSWORD, and POSTGRES_PASSWORD. e.g.:
 #   openssl rand -hex 32
+# There is no static operator API secret. Operators sign in through
+# Keycloak (realm kavach, client kavach). The imported demo user is
+# `operator` / `change-me-operator` with role admin and tenant bank-1.
+# Change that password before any partner deployment.
 
 # 2. Build and start the stack.
 docker compose up -d --build
@@ -50,7 +55,7 @@ signed evidence pack verifies:
 ```bash
 docker compose run --rm \
   -e KAVACH_API_URL=http://api:8000 \
-  -e KAVACH_OPERATOR_TOKEN=$KAVACH_OPERATOR_TOKEN \
+  -e KAVACH_OPERATOR_ACCESS_TOKEN=$KAVACH_OPERATOR_ACCESS_TOKEN \
   api ./scripts/smoke-onprem.sh
 ```
 
@@ -65,7 +70,10 @@ Open `http://<host>:8080`. In the top bar set:
 
 - API base URL: `http://<host>:8000`
 - Tenant: your tenant id (e.g. `bank-1`)
-- Operator token: the `KAVACH_OPERATOR_TOKEN` value
+- Operator token: a short-lived access token from Keycloak
+  (`POST /realms/kavach/protocol/openid-connect/token`,
+  grant type `password`, client `kavach`). The API rejects any static
+  shared secret.
 
 The four screens (Timeline, Trust, Step-up queue, Evidence export) read
 the substrate's read-side projections (ADR-0009) through the API.

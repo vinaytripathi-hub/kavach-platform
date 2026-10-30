@@ -21,7 +21,7 @@ def run_demo_flow(
     *,
     agent_id: str = "agent-cs-01",
     agent_token: str | None = None,
-    operator_token: str = "operator-dev-token",  # noqa: S107
+    operator_token: str,
     tenant: str = "bank-1",
 ) -> dict[str, Any]:
     """Run the full demo flow and return a summary of what happened."""

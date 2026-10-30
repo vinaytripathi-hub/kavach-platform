@@ -11,7 +11,12 @@ from datetime import datetime
 from typing import Any
 
 from kavach.capabilities.mandate._internal.attenuation import attenuation_ok
-from kavach.capabilities.mandate._internal.tokens import decode_hs256, issue_hs256, mandate_digest
+from kavach.capabilities.mandate._internal.tokens import (
+    decode_hs256,
+    issue_hs256,
+    mandate_digest,
+    temporal_rejection,
+)
 from kavach.capabilities.mandate.contracts import VerifiedMandate
 from kavach.capabilities.mandate.scope import is_supported_pattern, scope_covers_action
 from kavach.events.schemas.mandate import Mandate
@@ -72,10 +77,9 @@ def _check_mandate(
         return VerifiedMandate(
             mandate=mandate, verified=False, reason="Mandate agent mismatch.", digest=digest
         )
-    if mandate.expires_at <= now:
-        return VerifiedMandate(
-            mandate=mandate, verified=False, reason="Mandate expired.", digest=digest
-        )
+    temporal = temporal_rejection(mandate, now)
+    if temporal is not None:
+        return VerifiedMandate(mandate=mandate, verified=False, reason=temporal, digest=digest)
     if not all(is_supported_pattern(scope) for scope in mandate.action_scope):
         return VerifiedMandate(
             mandate=mandate,

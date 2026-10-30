@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import datetime
 from typing import Any
 
 import jwt
@@ -32,6 +33,17 @@ def issue_hs256(claims: dict[str, Any], key: bytes) -> str:
     """Sign ``claims`` as a compact JWT (HS256)."""
     token: str = jwt.encode(claims, _jwt_key(key), algorithm="HS256")
     return token
+
+
+def temporal_rejection(mandate: Mandate, now: datetime) -> str | None:
+    """Return a failure reason when ``now`` is outside the mandate lifetime."""
+    not_before = getattr(mandate, "not_before", None)
+    if not_before is not None and now < not_before:
+        return "Mandate not yet valid."
+    expires_at = getattr(mandate, "expires_at", None)
+    if expires_at is not None and expires_at <= now:
+        return "Mandate expired."
+    return None
 
 
 def decode_hs256(token: str, key: bytes) -> dict[str, Any] | None:

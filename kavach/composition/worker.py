@@ -40,7 +40,7 @@ def sign_body(secret: str | None, body: bytes) -> str | None:
     return f"sha256={digest}"
 
 
-async def _httpx_sender(url: str, body: bytes, headers: dict[str, str]) -> int:
+async def httpx_sender(url: str, body: bytes, headers: dict[str, str]) -> int:
     import httpx
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -59,7 +59,7 @@ class WebhookDispatcher:
         batch_size: int = 100,
     ) -> None:
         self._session_factory = session_factory
-        self._sender = sender or _httpx_sender
+        self._sender = sender or httpx_sender
         self._batch_size = batch_size
         self._outbox = OutboxStore()
         self._webhooks = WebhookStore()

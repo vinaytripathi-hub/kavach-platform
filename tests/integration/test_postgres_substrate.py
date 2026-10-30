@@ -20,6 +20,7 @@ import pytest_asyncio
 from kavach.api import create_app
 from kavach.composition import SubstrateConfig, build_substrate
 from kavach.events import utcnow
+from kavach.testing.oidc import mint_operator_token, oidc_settings
 from kavach.usecases.customer_service import CustomerServiceRules
 
 _PG_URL = os.environ.get("KAVACH_DATABASE_URL", "")
@@ -29,13 +30,13 @@ pytestmark = pytest.mark.skipif(
     reason="Set KAVACH_DATABASE_URL to a postgresql+asyncpg URL to run.",
 )
 
-_OPERATOR_TOKEN = "op-pg-secret"  # noqa: S105
+_OPERATOR_TOKEN = mint_operator_token(role="admin", tenant="bank-1")
 
 
 @pytest_asyncio.fixture
 async def pg_client() -> AsyncIterator[httpx.AsyncClient]:
     sub = build_substrate(
-        SubstrateConfig(database_url=_PG_URL, operator_token=_OPERATOR_TOKEN),
+        SubstrateConfig(database_url=_PG_URL, **oidc_settings()),
         rule_providers=[CustomerServiceRules()],
     )
     await sub.create_schema()

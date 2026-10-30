@@ -23,6 +23,7 @@ from kavach.capabilities.monitor import (
 from kavach.capabilities.monitor._internal.handler import MonitorHandler
 from kavach.capabilities.policy import PolicyEngine, PolicyRuleProvider
 from kavach.capabilities.sdk_bridge import CredentialVerifier, make_verifier
+from kavach.capabilities.signals.dispatch import SignalOutboxProjection
 from kavach.capabilities.storage import (
     EventStore,
     IdempotencyStore,
@@ -90,7 +91,7 @@ def build_substrate(
         MandateCurrentProjection(),
         AgentAnomalyCurrentProjection(),
     ]
-    handlers: list[ProjectionHandler] = [audit_writer, *projections]
+    handlers: list[ProjectionHandler] = [audit_writer, *projections, SignalOutboxProjection()]
     bus = EventBus(store=event_store, handlers=handlers)
     bus.register(
         MonitorHandler(
@@ -109,7 +110,7 @@ def build_substrate(
         provider.use_case: PolicyEngine(provider.rule_set()) for provider in rule_providers
     }
 
-    verifier = make_verifier(config.sdk_bridge_mode)
+    verifier = make_verifier(config.sdk_bridge_mode, jwt_secret=config.jwt_secret.encode("utf-8"))
     mandate_verifier = make_mandate_verifier(config.mandate_verifier_mode, config.audit_key_bytes)
 
     service = SubstrateService(
@@ -120,6 +121,9 @@ def build_substrate(
         policy_engines=policy_engines,
         mandate_verifier=mandate_verifier,
         mandate_key=config.audit_key_bytes,
+        jwt_secret=config.jwt_secret.encode("utf-8"),
+        credential_ttl_seconds=config.agent_credential_ttl_seconds,
+        credential_audience=config.expected_audience,
     )
 
     return Substrate(

@@ -8,6 +8,7 @@ one by configuration.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +24,13 @@ class VerifiedAgent(BaseModel):
     scopes: list[str] = Field(default_factory=list)
     delegation_ok: bool = True
     reason: str = ""
+    # Session-credential lifetime (ADR-0020). Empty for holder credentials
+    # and the legacy ``agent:`` dev token, which carry no expiry.
+    expires_at: datetime | None = None
+    not_before: datetime | None = None
+    issued_at: datetime | None = None
+    session_id: str | None = None
+    credential_id: str | None = None
 
     def authorizes(self, action_type: str) -> bool:
         """Whether the verified scopes permit ``action_type``.

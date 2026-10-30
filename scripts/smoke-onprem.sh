@@ -6,12 +6,16 @@
 #
 # Usage:
 #   KAVACH_API_URL=http://localhost:8000 \
-#   KAVACH_OPERATOR_TOKEN=... \
+#   KAVACH_OPERATOR_ACCESS_TOKEN=... \
 #   ./scripts/smoke-onprem.sh
 set -euo pipefail
 
 API_URL="${KAVACH_API_URL:-http://localhost:8000}"
-OPERATOR_TOKEN="${KAVACH_OPERATOR_TOKEN:-operator-dev-token}"
+OPERATOR_TOKEN="${KAVACH_OPERATOR_ACCESS_TOKEN:-}"
+if [[ -z "${OPERATOR_TOKEN}" ]]; then
+  echo "Set KAVACH_OPERATOR_ACCESS_TOKEN to an OIDC access token (ADR-0021)." >&2
+  exit 1
+fi
 TENANT="${KAVACH_TENANT:-bank-1}"
 
 echo "Kavach on-prem smoke test"

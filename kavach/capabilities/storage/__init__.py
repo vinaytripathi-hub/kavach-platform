@@ -17,13 +17,17 @@ from kavach.capabilities.storage._internal.engine import (
 from kavach.capabilities.storage._internal.event_store import EventStore
 from kavach.capabilities.storage._internal.idempotency import IdempotencyStore
 from kavach.capabilities.storage._internal.models import (
+    AgentCredentialRow,
     AgentRegistrationRow,
+    AgentRevocationRow,
     Base,
+    CredentialRevocationRow,
     EventRow,
     IdempotencyRow,
     MandateRevocationRow,
     MandateRow,
     OutboxRow,
+    SignalOutboxRow,
     WebhookSubscriptionRow,
 )
 from kavach.capabilities.storage._internal.outbox import OutboxStore, WebhookStore
@@ -34,8 +38,11 @@ from kavach.capabilities.storage.contracts import (
 )
 
 __all__ = [
+    "AgentCredentialRow",
     "AgentRegistrationRow",
+    "AgentRevocationRow",
     "Base",
+    "CredentialRevocationRow",
     "EventRow",
     "EventStore",
     "IdempotencyRow",
@@ -44,6 +51,7 @@ __all__ = [
     "MandateRow",
     "OutboxRow",
     "OutboxStore",
+    "SignalOutboxRow",
     "SupportsAppend",
     "SupportsIdempotency",
     "SupportsReplay",

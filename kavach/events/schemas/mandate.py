@@ -43,6 +43,7 @@ class Mandate(BaseModel):
     constraints: list[MandateConstraint] = Field(default_factory=list)
     issued_at: datetime = Field(default_factory=utcnow)
     expires_at: datetime
+    not_before: datetime | None = None
     parent_mandate_id: str | None = None
     nonce: str
 

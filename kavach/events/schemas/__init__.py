@@ -34,6 +34,7 @@ from kavach.events.schemas.mandate import (
 )
 from kavach.events.schemas.monitor import AgentMetricSnapshot, AnomalyAcknowledged, AnomalyDetected
 from kavach.events.schemas.policy import DecisionEmitted, Outcome, PolicyEvaluated
+from kavach.events.schemas.revocation import AgentRevoked, CredentialRevoked
 from kavach.events.schemas.stepup import StepUpRequested, StepUpResolved
 from kavach.events.schemas.trust import CompositionSpec, TrustAssessment, TrustDimension
 from kavach.events.schemas.trust_events import TrustAssessmentEmitted
@@ -42,8 +43,10 @@ __all__ = [  # noqa: RUF022 (grouped by concern for readability)
     # Events
     "ActionExecuted",
     "AgentMetricSnapshot",
+    "AgentRevoked",
     "AnomalyAcknowledged",
     "AnomalyDetected",
+    "CredentialRevoked",
     "DecisionEmitted",
     "DecisionFeedbackRecorded",
     "EvidenceRecorded",

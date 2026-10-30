@@ -23,7 +23,7 @@ Against an already-running API:
 cd examples/node/minimal-agent
 npm install
 KAVACH_BASE_URL=http://127.0.0.1:8000 \
-KAVACH_OPERATOR_TOKEN=operator-dev-token \
+KAVACH_OPERATOR_TOKEN=<oidc-access-token> \
 npm start
 ```
 
@@ -33,4 +33,4 @@ npm start
 | ----------------------- | ------------------------ | -------------------------------- |
 | `KAVACH_BASE_URL`       | `http://127.0.0.1:8000`  | Base URL of the Kavach API       |
 | `KAVACH_TENANT`         | `bank-1`                 | Tenant header                    |
-| `KAVACH_OPERATOR_TOKEN` | `operator-dev-token`     | Operator bearer token            |
+| `KAVACH_OPERATOR_TOKEN` | (OIDC access token)      | Operator bearer token (ADR-0021) |

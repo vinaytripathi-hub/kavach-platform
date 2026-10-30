@@ -19,7 +19,12 @@ import warnings
 from datetime import UTC, datetime
 from typing import Any
 
-from kavach.capabilities.mandate._internal.tokens import decode_hs256, issue_hs256, mandate_digest
+from kavach.capabilities.mandate._internal.tokens import (
+    decode_hs256,
+    issue_hs256,
+    mandate_digest,
+    temporal_rejection,
+)
 from kavach.capabilities.mandate.contracts import VerifiedMandate
 from kavach.capabilities.mandate.scope import scope_covers_action
 from kavach.events.schemas.mandate import Mandate, MandateConstraint
@@ -150,10 +155,9 @@ class AP2MandateVerifier:
             return VerifiedMandate(
                 mandate=mandate, verified=False, reason="Mandate agent mismatch.", digest=digest
             )
-        if mandate.expires_at <= now:
-            return VerifiedMandate(
-                mandate=mandate, verified=False, reason="Mandate expired.", digest=digest
-            )
+        temporal = temporal_rejection(mandate, now)
+        if temporal is not None:
+            return VerifiedMandate(mandate=mandate, verified=False, reason=temporal, digest=digest)
         if not scope_covers_action(mandate.action_scope, expected_action):
             return VerifiedMandate(
                 mandate=mandate,
@@ -282,10 +286,9 @@ class AP2MandateVerifier:
             return VerifiedMandate(
                 mandate=mandate, verified=False, reason="Mandate agent mismatch.", digest=digest
             )
-        if mandate.expires_at <= now:
-            return VerifiedMandate(
-                mandate=mandate, verified=False, reason="Mandate expired.", digest=digest
-            )
+        temporal = temporal_rejection(mandate, now)
+        if temporal is not None:
+            return VerifiedMandate(mandate=mandate, verified=False, reason=temporal, digest=digest)
         if not scope_covers_action(mandate.action_scope, expected_action):
             return VerifiedMandate(
                 mandate=mandate,

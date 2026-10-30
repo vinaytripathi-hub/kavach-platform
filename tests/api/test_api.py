@@ -10,9 +10,10 @@ import pytest_asyncio
 from kavach.api import create_app
 from kavach.capabilities.policy import PolicyCondition, PolicyRule, PolicyRuleSet
 from kavach.composition import SubstrateConfig, build_substrate
+from kavach.testing.oidc import mint_operator_token, oidc_settings
 
 AGENT_TOKEN = "agent:agent-1:kyc,account.funds"  # noqa: S105
-OPERATOR_TOKEN = "op-secret"  # noqa: S105
+OPERATOR_TOKEN = mint_operator_token(role="admin", tenant="bank-1")
 
 
 class _CustomerServiceRules:
@@ -52,7 +53,7 @@ def _operator_headers() -> dict[str, str]:
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
     sub = build_substrate(
-        SubstrateConfig(database_url="sqlite+aiosqlite://", operator_token=OPERATOR_TOKEN),
+        SubstrateConfig(database_url="sqlite+aiosqlite://", **oidc_settings()),
         rule_providers=[_CustomerServiceRules()],
     )
     await sub.create_schema()
@@ -179,7 +180,7 @@ async def test_operator_token_required_for_resolve(client: httpx.AsyncClient) ->
         json={"resolution": "approve", "operator_id": "op-1"},
         headers={"Authorization": "Bearer wrong-token", "X-Kavach-Tenant": "bank-1"},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 def _mandate_payload() -> dict[str, object]:
@@ -206,7 +207,8 @@ async def test_duplicate_mandate_issue_returns_409(client: httpx.AsyncClient) ->
 
 
 def _operator_headers_tenant(tenant: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {OPERATOR_TOKEN}", "X-Kavach-Tenant": tenant}
+    token = mint_operator_token(role="admin", tenant=tenant)
+    return {"Authorization": f"Bearer {token}", "X-Kavach-Tenant": tenant}
 
 
 async def test_malformed_mandate_header_denies_not_500(client: httpx.AsyncClient) -> None:

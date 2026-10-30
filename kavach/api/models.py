@@ -238,6 +238,26 @@ class MandateRevokeRequest(BaseModel):
     reason: str = ""
 
 
+class CredentialIssueRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ttl_seconds: int | None = None
+
+
+class CredentialIssueResult(BaseModel):
+    credential_id: str
+    session_id: str
+    token: str
+    expires_at: datetime
+    refresh_token: str
+    refresh_expires_at: datetime
+
+
+class RevocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revoked_by: str
+    reason: str = ""
+
+
 class PolicyUploadRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     use_case: str

@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import asyncio
 
+from kavach.capabilities.signals.dispatch import SignalDispatcher
 from kavach.composition import build_substrate
 from kavach.composition.config import SubstrateConfig
-from kavach.composition.worker import WebhookDispatcher
+from kavach.composition.worker import WebhookDispatcher, httpx_sender
 
 
 async def _run() -> None:  # pragma: no cover - long-running loop
@@ -18,7 +19,15 @@ async def _run() -> None:  # pragma: no cover - long-running loop
     if substrate.config.auto_create_schema:
         await substrate.create_schema()
     dispatcher = WebhookDispatcher(substrate.session_factory)
-    await dispatcher.run()
+    signals = SignalDispatcher(
+        substrate.session_factory,
+        httpx_sender,
+        receiver_url=substrate.config.signal_receiver_url,
+        issuer=substrate.config.signal_issuer,
+        audience=substrate.config.signal_audience,
+        key=substrate.config.jwt_secret.encode("utf-8"),
+    )
+    await asyncio.gather(dispatcher.run(), signals.run())
 
 
 def main() -> None:  # pragma: no cover - process entrypoint

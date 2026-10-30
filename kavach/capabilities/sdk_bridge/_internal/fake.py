@@ -22,6 +22,9 @@ _SCOPED_TOKEN_PARTS = 3
 class FakeCredentialVerifier:
     """A deterministic, non-cryptographic verifier for offline use."""
 
+    def __init__(self, jwt_secret: bytes | None = None) -> None:
+        self._jwt_secret = jwt_secret
+
     def verify(
         self,
         token: str,
@@ -29,7 +32,12 @@ class FakeCredentialVerifier:
         expected_audience: str,
         required_action: str | None = None,
     ) -> VerifiedAgent:
-        del expected_audience, required_action  # not used by the fake
+        del required_action  # not used by the fake
+        if self._jwt_secret and token.count(".") == 2:  # noqa: PLR2004 - JWT has two dots
+            from kavach.capabilities.credentials import is_session_token, verify_session
+
+            if is_session_token(token):
+                return verify_session(token, self._jwt_secret, expected_audience)
         if not token or token.startswith("invalid"):
             return VerifiedAgent(
                 agent_id="",

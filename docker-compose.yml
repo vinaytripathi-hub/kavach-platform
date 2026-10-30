@@ -29,11 +29,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     environment:
       KAVACH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kavach}:${POSTGRES_PASSWORD:-kavach}@db:5432/${POSTGRES_DB:-kavach}
       KAVACH_AUDIT_HMAC_KEY: ${KAVACH_AUDIT_HMAC_KEY:?set a strong audit key}
       KAVACH_JWT_SECRET: ${KAVACH_JWT_SECRET:?set a strong jwt secret}
-      KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
+      KAVACH_OIDC_ISSUER: http://keycloak:8080/realms/kavach
+      KAVACH_OIDC_JWKS_URL: http://keycloak:8080/realms/kavach/protocol/openid-connect/certs
+      KAVACH_OIDC_AUDIENCE: ${KAVACH_OIDC_AUDIENCE:-kavach}
       KAVACH_SDK_BRIDGE_MODE: ${KAVACH_SDK_BRIDGE_MODE:-fake}
       KAVACH_MANDATE_VERIFIER_MODE: ${KAVACH_MANDATE_VERIFIER_MODE:-fake}
       KAVACH_AUDIT_SIGNER_MODE: ${KAVACH_AUDIT_SIGNER_MODE:-hmac}
@@ -51,7 +55,8 @@ services:
     environment:
       KAVACH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kavach}:${POSTGRES_PASSWORD:-kavach}@db:5432/${POSTGRES_DB:-kavach}
       KAVACH_AUDIT_HMAC_KEY: ${KAVACH_AUDIT_HMAC_KEY:?set a strong audit key}
-      KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
+      KAVACH_JWT_SECRET: ${KAVACH_JWT_SECRET:?set a strong jwt secret}
+      KAVACH_SIGNAL_RECEIVER_URL: ${KAVACH_SIGNAL_RECEIVER_URL:-}
       KAVACH_AUTO_CREATE_SCHEMA: "false"
     command: ["python", "-m", "kavach.worker"]
 
@@ -65,7 +70,7 @@ services:
       - api
     environment:
       KAVACH_API_URL: http://api:8000
-      KAVACH_OPERATOR_TOKEN: ${KAVACH_OPERATOR_TOKEN:?set an operator token}
+      KAVACH_OPERATOR_ACCESS_TOKEN: ${KAVACH_OPERATOR_ACCESS_TOKEN:-}
       KAVACH_AGENT_TOKEN: ${KAVACH_AGENT_TOKEN:-agent:agent-cs-01:kyc,account.funds,complaint}
     command:
       - python
@@ -79,6 +84,17 @@ services:
       - "8900"
     ports:
       - "${MCP_PORT:-8900}:8900"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me-keycloak-admin}
+    volumes:
+      - ./deploy/keycloak/kavach-realm.json:/opt/keycloak/data/import/kavach-realm.json:ro
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
 
   console:
     image: nginx:1.27-alpine

@@ -11,7 +11,7 @@
 #       "KAVACH_API_URL": "http://localhost:8000",
 #       "KAVACH_TENANT": "bank-1",
 #       "KAVACH_AGENT_TOKEN": "agent:agent-cs-01:kyc,account.funds,complaint",
-#       "KAVACH_OPERATOR_TOKEN": "operator-dev-token"
+#       "KAVACH_OPERATOR_ID": "op-demo"
 #     }
 #   }
 # then start a chat and ask it to call the decide tool.

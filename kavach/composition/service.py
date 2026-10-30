@@ -15,6 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kavach.capabilities.audit import AuditExport, AuditExporter
+from kavach.capabilities.credentials import (
+    IssuedCredential,
+    RefreshClaims,
+    clamp_ttl,
+    enforce_temporal,
+    mint_session,
+    verify_refresh,
+)
 from kavach.capabilities.mandate import MandateVerifier, VerifiedMandate
 from kavach.capabilities.mandate._internal.ap2_adapter import AP2MandateVerifier, issue_ap2_mandate
 from kavach.capabilities.mandate._internal.fake import issue_fake_mandate
@@ -22,7 +30,10 @@ from kavach.capabilities.mandate._internal.tokens import mandate_digest
 from kavach.capabilities.policy import PolicyDecision, PolicyEngine, PolicyRuleSet
 from kavach.capabilities.sdk_bridge import VerifiedAgent
 from kavach.capabilities.storage import (
+    AgentCredentialRow,
     AgentRegistrationRow,
+    AgentRevocationRow,
+    CredentialRevocationRow,
     EventStore,
     MandateRevocationRow,
     MandateRow,
@@ -33,6 +44,8 @@ from kavach.composition.bus import EventBus
 from kavach.events import new_event_id, utcnow
 from kavach.events.schemas import (
     ActionExecuted,
+    AgentRevoked,
+    CredentialRevoked,
     Mandate,
     MandateIssued,
     MandatePresented,
@@ -109,6 +122,9 @@ class SubstrateService:
         policy_engines: dict[str, PolicyEngine],
         mandate_verifier: MandateVerifier | None = None,
         mandate_key: bytes = b"",
+        jwt_secret: bytes = b"",
+        credential_ttl_seconds: int = 900,
+        credential_audience: str = "kavach",
     ) -> None:
         self._session_factory = session_factory
         self._bus = bus
@@ -117,6 +133,9 @@ class SubstrateService:
         self._policy_engines = policy_engines
         self._mandate_verifier = mandate_verifier
         self._mandate_key = mandate_key
+        self._jwt_secret = jwt_secret
+        self._credential_ttl_seconds = credential_ttl_seconds
+        self._credential_audience = credential_audience
 
     # -- writes -------------------------------------------------------------
 
@@ -271,6 +290,144 @@ class SubstrateService:
             )
             await self._bus.publish(session, event)
         return event
+
+    async def issue_session_credential(
+        self,
+        *,
+        tenant_id: str,
+        agent_id: str,
+        scopes: list[str],
+        ttl_seconds: int | None = None,
+    ) -> IssuedCredential:
+        """Mint a ≤15-minute session credential after the holder is verified."""
+        ttl = clamp_ttl(ttl_seconds, self._credential_ttl_seconds)
+        async with session_scope(self._session_factory) as session:
+            revoked = await session.get(AgentRevocationRow, (tenant_id, agent_id))
+            if revoked is not None:
+                raise PermissionError(f"Agent '{agent_id}' is revoked.")
+        issued = mint_session(
+            agent_id=agent_id,
+            scopes=scopes,
+            audience=self._credential_audience,
+            key=self._jwt_secret,
+            ttl_seconds=ttl,
+        )
+        async with session_scope(self._session_factory) as session:
+            session.add(_credential_row(tenant_id, agent_id, issued, kind="session"))
+            session.add(_credential_row(tenant_id, agent_id, issued, kind="refresh"))
+        return issued
+
+    async def refresh_session_credential(
+        self, *, tenant_id: str, refresh_token: str
+    ) -> IssuedCredential:
+        """Rotate a refresh token into a new session credential."""
+        claims = verify_refresh(refresh_token, self._jwt_secret, self._credential_audience)
+        if claims is None:
+            raise ValueError("Refresh token is invalid.")
+        self._reject_refresh_temporal(claims)
+        async with session_scope(self._session_factory) as session:
+            if await session.get(AgentRevocationRow, (tenant_id, claims.agent_id)) is not None:
+                raise PermissionError(f"Agent '{claims.agent_id}' is revoked.")
+            revoked_refresh = await session.get(
+                CredentialRevocationRow, (tenant_id, claims.credential_id)
+            )
+            if revoked_refresh is not None:
+                raise PermissionError("Refresh token is revoked.")
+        issued = mint_session(
+            agent_id=claims.agent_id,
+            scopes=claims.scopes,
+            audience=self._credential_audience,
+            key=self._jwt_secret,
+            ttl_seconds=self._credential_ttl_seconds,
+            session_id=claims.session_id,
+        )
+        async with session_scope(self._session_factory) as session:
+            session.add(
+                CredentialRevocationRow(
+                    tenant_id=tenant_id,
+                    credential_id=claims.credential_id,
+                    agent_id=claims.agent_id,
+                    revoked_by="refresh",
+                    reason="rotated",
+                    revoked_at=utcnow(),
+                )
+            )
+            session.add(_credential_row(tenant_id, claims.agent_id, issued, kind="session"))
+            session.add(_credential_row(tenant_id, claims.agent_id, issued, kind="refresh"))
+        return issued
+
+    async def revoke_agent(
+        self, *, tenant_id: str, agent_id: str, revoked_by: str, reason: str = ""
+    ) -> AgentRevoked:
+        async with session_scope(self._session_factory) as session:
+            existing = await session.get(AgentRevocationRow, (tenant_id, agent_id))
+            if existing is not None:
+                raise ValueError(f"Agent '{agent_id}' already revoked.")
+            session.add(
+                AgentRevocationRow(
+                    tenant_id=tenant_id,
+                    agent_id=agent_id,
+                    revoked_by=revoked_by,
+                    reason=reason,
+                    revoked_at=utcnow(),
+                )
+            )
+            event = AgentRevoked(
+                tenant_id=tenant_id,
+                agent_id=agent_id,
+                revoked_by=revoked_by,
+                reason=reason,
+            )
+            await self._bus.publish(session, event)
+        return event
+
+    async def revoke_credential(
+        self,
+        *,
+        tenant_id: str,
+        credential_id: str,
+        revoked_by: str,
+        reason: str = "",
+    ) -> CredentialRevoked:
+        async with session_scope(self._session_factory) as session:
+            row = await session.get(AgentCredentialRow, (tenant_id, credential_id))
+            if row is None:
+                raise KeyError(f"No credential '{credential_id}'.")
+            existing = await session.get(CredentialRevocationRow, (tenant_id, credential_id))
+            if existing is not None:
+                raise ValueError(f"Credential '{credential_id}' already revoked.")
+            session.add(
+                CredentialRevocationRow(
+                    tenant_id=tenant_id,
+                    credential_id=credential_id,
+                    agent_id=row.agent_id,
+                    revoked_by=revoked_by,
+                    reason=reason,
+                    revoked_at=utcnow(),
+                )
+            )
+            event = CredentialRevoked(
+                tenant_id=tenant_id,
+                agent_id=row.agent_id,
+                credential_id=credential_id,
+                revoked_by=revoked_by,
+                reason=reason,
+            )
+            await self._bus.publish(session, event)
+        return event
+
+    def _reject_refresh_temporal(self, claims: RefreshClaims) -> None:
+        verified = VerifiedAgent(
+            agent_id=claims.agent_id,
+            verified=True,
+            expires_at=claims.expires_at,
+            not_before=claims.not_before,
+        )
+        temporal = enforce_temporal(verified, utcnow())
+        if temporal == "credential_expired":
+            raise PermissionError("Refresh token expired.")
+        if temporal == "credential_not_yet_valid":
+            raise PermissionError("Refresh token not yet valid.")
 
     async def current_anomaly_severity(self, *, tenant_id: str, agent_id: str) -> str:
         async with session_scope(self._session_factory) as session:
@@ -510,3 +667,28 @@ class SubstrateService:
     @property
     def now(self) -> datetime:
         return utcnow()
+
+
+def _credential_row(
+    tenant_id: str,
+    agent_id: str,
+    issued: IssuedCredential,
+    *,
+    kind: str,
+) -> AgentCredentialRow:
+    if kind == "refresh":
+        credential_id = issued.refresh_credential_id
+        expires_at = issued.refresh_expires_at
+    else:
+        credential_id = issued.credential_id
+        expires_at = issued.expires_at
+    return AgentCredentialRow(
+        tenant_id=tenant_id,
+        credential_id=credential_id,
+        agent_id=agent_id,
+        session_id=issued.session_id,
+        kind=kind,
+        scopes=list(issued.scopes),
+        issued_at=utcnow(),
+        expires_at=expires_at,
+    )

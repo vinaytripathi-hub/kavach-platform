@@ -1,6 +1,6 @@
 # Kavach Platform — Business User Guide
 
-> **Covered as of Phase 1.5.** This guide describes only what has shipped and
+> **Covered as of Phase 2a.** This guide describes only what has shipped and
 > been tested in the current working prototype. Features that are planned for
 > later phases are clearly marked as *coming later* and are not yet available.
 
@@ -65,7 +65,8 @@ an approved payee, before a certain time"). Because the mandate is
 cryptographically signed, anyone downstream can confirm it is genuine and was
 not tampered with. If a specific action is not covered by a valid mandate, it
 can be refused — even if the agent's general credentials would otherwise allow
-it. Mandates can be **revoked** before they expire.
+it. Mandates can be **revoked** before they expire. A mandate can also carry a
+**not-before time**, so it cannot be used earlier than the originator allowed.
 
 **Policy decision.** For every proposed action, Kavach's policy engine returns
 one of three outcomes:
@@ -163,7 +164,38 @@ signed events.
 > today through Kavach's administrative interface; they are **not yet part of the
 > point-and-click operator console**. Console screens for mandate issuance and
 > revocation, along with reusable mandate templates, are **coming in a later
-> phase**.
+> phase**. A mandate can include a **not-before time**: it is issued now and
+> becomes usable only from that time onward.
+
+**Short-lived agent credentials and revocation.** An agent does not hold a
+long-lived password. Kavach issues an **access credential** that lasts **at
+most 15 minutes**. The credential can be **refreshed**, so legitimate work can continue. A
+credential that has **expired**, or that is **not yet valid**, is refused.
+
+An **administrator** can **revoke an agent** or **revoke a single credential**.
+The next request from that agent or credential is **denied, in under a
+second**. Mandate revocation, described above, continues to work the same way.
+
+**Operator sign-in.** Operators no longer share one password. Each person
+**signs in through the organization's identity system**. The reference
+on-premise install includes **Keycloak** for that sign-in. Three roles are
+recognized: **operator**, **auditor**, and **admin**.
+
+- **Operator** — reviews escalations, issues and revokes mandates, and reviews
+  agent activity, trust, and anomalies.
+- **Auditor** — reviews activity, trust, and anomalies, and can request an
+  evidence export. An auditor does not change live controls.
+- **Admin** — can do what an operator can, and can also register agents,
+  update policy, and revoke an agent or a credential.
+
+A person can act **only inside their own tenant** — the organization boundary
+recorded on their sign-in. A sign-in for one tenant cannot be used on another
+tenant's agents, mandates, or records.
+
+**Security signals to the bank.** When an agent or a mandate is revoked, or
+when a **critical anomaly** is detected, Kavach can send a **security signal**
+(CAEP/SSF, a standard notice that access should be re-checked or withdrawn)
+to a **receiver the bank configures**.
 
 **Reviewing the step-up queue.** The console shows every action that policy has
 escalated for human approval, with the reason and required role. An operator
@@ -236,9 +268,17 @@ relevant to agentic deployments:
 
 In October 2026, NIST / NCCoE published design tenets for agent identity
 management systems. Kavach maps directly onto the **accountability-focused**
-tenets. In business terms, the tenets fully implemented and tested today
-include:
+tenets. Of the ten tenets, the current scorecard is **7 implemented, 3
+partial, and 0 weak**.
 
+In business terms, the tenets fully implemented and tested today include:
+
+- **Short-lived, revocable authorization (tenet 04)** — agent access
+  credentials last at most 15 minutes, can be refreshed, and are refused when
+  expired or not yet valid. An administrator can revoke an agent or a single
+  credential, and the next request is denied in under a second. Mandates can
+  be revoked, and a mandate can carry a not-before time. Operators sign in as
+  individuals through the organization's identity system.
 - **Human-in-the-loop triggers** — risk-based escalation to a person.
 - **Signed mandates and constraints** — bounded, verifiable authorization of
   what an agent may do.
@@ -248,11 +288,11 @@ include:
 - **Continuous monitoring** — agent-specific anomaly detection.
 - **Immutable evidence** — an independent, tamper-evident chain of custody.
 
-Other tenets — notably **short-lived, automatically revocable authorization**
-and **zero standing privilege** — are **partial or planned** in the current
-prototype, and the platform's own documentation is explicit about this. The
-honest message to a risk committee is: *the accountability core is built and
-tested; identity-lifecycle hardening is on the roadmap.*
+Three tenets remain **partial**: distinct agent identification, delegation and
+attenuation, and **zero standing privilege**. The platform's own documentation
+is explicit about this. The honest message to a risk committee is: *short-lived,
+revocable authorization is implemented and tested; standing privilege and
+cryptographic identity maturity are the remaining partial items.*
 
 > **Important framing.** Kavach provides **mechanisms that support** these
 > obligations. It does not, by itself, make your organization compliant; that
@@ -272,7 +312,7 @@ requirements.
 
 Being honest about scope is a core principle of this guide.
 
-**Available and tested today (Phase 1.5):**
+**Available and tested today (through Phase 2a):**
 
 - The accountability substrate: policy decisions (allow / deny / step-up),
   signed tamper-evident evidence, multidimensional trust, and continuous
@@ -284,6 +324,16 @@ Being honest about scope is a core principle of this guide.
 - The **operator console** with timeline, anomalies, trust, step-up queue, and
   evidence-export screens.
 - On-premise deployment inside your own perimeter.
+- **Short-lived credentials, revocation, and individual operator sign-in.**
+  Agent access credentials last at most 15 minutes, can be refreshed, and are
+  refused when expired or not yet valid. An administrator can revoke an agent
+  or a single credential; the next request is denied in under a second.
+  Mandates remain revocable and can include a not-before time. Operators sign
+  in through the organization's identity system — the reference on-premise
+  install includes Keycloak — in the roles operator, auditor, or admin,
+  and can act only inside their own tenant. When an agent or a mandate is
+  revoked, or a critical anomaly is detected, Kavach can send a CAEP/SSF
+  security signal to a receiver the bank configures.
 - **Developer SDKs and a reference agent**: Kavach can now be adopted as a
   one-line install in both major ecosystems — a Python package and a
   TypeScript/Node package — so your teams treat it as a dependency they add
@@ -308,9 +358,7 @@ Being honest about scope is a core principle of this guide.
   underwriting and trading are planned but not yet built).
 - **Operator console polish**, including mandate-issuance wizards and reusable
   mandate templates.
-- **Identity-lifecycle hardening**: shorter-lived and automatically revocable
-  authorizations, stronger operator sign-in, and hardware-backed key custody for
-  signing.
+- **Hardware-backed key custody** for the keys that sign audit evidence.
 - **Broader compliance dashboards** over the monitoring and feedback loop.
 
 As each of these lands and is tested, a future version of this guide will
@@ -326,7 +374,17 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
   the task the agent is carrying out.
 - **Mandate** — a bounded, cryptographically signed authorization from an
   originator to an agent, defining allowed actions and constraints; can be
-  revoked before expiry.
+  revoked before expiry, and can include a not-before time.
+- **Access credential** — a short-lived permission Kavach issues to an agent.
+  It lasts at most 15 minutes, can be refreshed, and is refused if it is
+  expired or not yet valid. An administrator can revoke one credential, or the
+  agent that holds it; the next request is denied in under a second.
+- **Not-before time** — the earliest moment a mandate may be used.
+- **Tenant** — the organization boundary recorded on a person's sign-in. A
+  person can act only inside their own tenant.
+- **Security signal** — a CAEP/SSF notice Kavach can send to a receiver the
+  bank configures when an agent or a mandate is revoked, or when a critical
+  anomaly is detected.
 - **Constraint** — a specific limit within a mandate (for example, a maximum
   amount or an approved payee).
 - **Policy decision** — the outcome of checking a proposed action against the
@@ -334,8 +392,12 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
 - **Step-up** — an escalation that requires a human to approve or reject a
   high-impact action before it proceeds.
 - **Step-up queue** — the list of pending escalations awaiting operator review.
-- **Operator** — an authorized human who reviews escalations, issues and revokes
-  mandates, and reviews agent activity.
+- **Operator** — a person who signs in through the organization's identity
+  system. The operator role reviews escalations, issues and revokes mandates,
+  and reviews agent activity. The auditor role reviews activity and requests
+  evidence exports, and does not change live controls. The admin role can do
+  what an operator can, and can also revoke an agent or a credential.
+  Each person acts only inside their own tenant.
 - **Evidence pack** — an exportable, signed, tamper-evident bundle of records for
   an agent and time window that an auditor can independently verify.
 - **Audit chain** — the append-only, cryptographically linked record of all
@@ -360,3 +422,13 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
   independently verified (installed fresh from the public registries and run
   through the full accountability loop end-to-end); the integration story for
   partner developers.**
+- **Phase 2a — short-lived, revocable authorization:** agent credentials last
+  at most 15 minutes and can be refreshed; expired or not-yet-valid credentials
+  are refused; an administrator can revoke an agent or a credential, and the
+  next request is denied in under a second; mandates can carry a not-before
+  time; operators sign in individually through the organization's identity
+  system (the reference on-premise install includes Keycloak) as operator,
+  auditor, or admin, and only inside their own tenant; a CAEP/SSF
+  security signal can be sent when an agent or mandate is revoked or a critical
+  anomaly is detected; NIST tenet 04 is implemented (scorecard: 7 implemented,
+  3 partial, 0 weak).**

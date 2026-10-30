@@ -34,7 +34,7 @@ def _default_client_factory() -> KavachClient:
         os.environ.get("KAVACH_API_URL", "http://localhost:8000"),
         token=os.environ.get("KAVACH_AGENT_TOKEN", "agent:agent-cs-01:kyc,account.funds"),
         tenant=os.environ.get("KAVACH_TENANT", "bank-1"),
-        operator=os.environ.get("KAVACH_OPERATOR_TOKEN", "operator-dev-token"),
+        operator=os.environ.get("KAVACH_OPERATOR_ID", "op-demo"),
     )
 
 
