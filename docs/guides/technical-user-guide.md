@@ -1105,7 +1105,7 @@ NIST tenet 04 (short-lived, dynamic, revocable authorization) is
 on Postgres 16. The scorecard in
 [`docs/compliance/nist-agentic-iam-mapping.md`](../compliance/nist-agentic-iam-mapping.md)
 is **7 / 3 / 0**: seven Implemented (tenets 04–10), three Partial (01–03),
-zero Weak. There are 21 accepted ADRs.
+zero Weak. There are 22 accepted ADRs.
 
 Gate tests:
 
@@ -1188,4 +1188,4 @@ Gate tests:
   no `KAVACH_OPERATOR_TOKEN`), 15-minute session credentials and refresh,
   agent and credential revocation checked on the next request, mandate
   `not_before`, and CAEP/SSF delivery from the worker. Scorecard 7/3/0.
-  ADRs 0020 and 0021 (21 accepted).
+  ADRs 0020 and 0021 (22 accepted, including ADR-0022 market sequencing).

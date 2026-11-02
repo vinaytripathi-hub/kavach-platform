@@ -44,7 +44,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
     app = FastAPI(
         title="Kavach Platform API",
         version="1.0.0",
-        description="Agent Accountability for Indian BFSI (ADR-0016).",
+        description="Agent Accountability for Regulated Finance (ADR-0016).",
         lifespan=lifespan,
     )
     app.state.substrate = substrate

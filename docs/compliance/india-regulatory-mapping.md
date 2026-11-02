@@ -1,6 +1,6 @@
 # India Regulatory Mapping — RBI / SEBI / IRDAI / DPDP
 
-Kavach's primary market is Indian BFSI ([ADR-0005](../adr/0005-accountability-positioning.md)).
+India (RBI/DPDP) is a target market (see [ADR-0022](../adr/0022-market-sequencing-us-first.md); original positioning in [ADR-0005](../adr/0005-accountability-positioning.md)).
 This document maps the supervisory expectations most relevant to
 agent accountability onto implemented Kavach mechanisms.
 

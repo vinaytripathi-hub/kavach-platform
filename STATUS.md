@@ -1,6 +1,6 @@
 # Kavach Platform — Status
 
-_Agent accountability for Indian BFSI. Proprietary, source-available._
+_Agent Accountability for Regulated Finance. Proprietary, source-available._
 
 **Last updated:** 2026-10-30 · **Latest release:** `v0.0.1`
 
@@ -15,7 +15,7 @@ _Agent accountability for Indian BFSI. Proprietary, source-available._
 | **SDK packaging + publish (Phase 1.5)** | **CLOSED** — `aurvia-kavach` live on PyPI and `@aurvia/kavach` live on npm (both `0.0.1`). See [gate-closure evidence](docs/guides/phase-1.5-gate-closure.md). |
 | **Tests** | **176 unit passing**; Postgres integration passing (full flow, mandate revocation, credential-family refresh); 2 e2e passing. Live Keycloak test still skips without an issuer. |
 | **Coverage** | **82.8%** on the unit run (push gate: 70%; CI unit floor 80%) |
-| **ADRs** | **21** — see [`docs/adr/README.md`](docs/adr/README.md) |
+| **ADRs** | **22** — see [`docs/adr/README.md`](docs/adr/README.md) |
 | **License** | Proprietary, source-available ([LICENSE](LICENSE), [NOTICE](NOTICE)); built on the AGPL-3.0 Pramana Protocol via its public SDK only |
 
 ## NIST agentic-IAM scorecard (7 / 3 / 0)

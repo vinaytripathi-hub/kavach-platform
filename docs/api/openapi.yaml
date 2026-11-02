@@ -3,7 +3,7 @@ info:
   title: Kavach Platform API
   version: "1.0.0"
   description: |
-    Agent Accountability for Indian BFSI.
+    Agent Accountability for Regulated Finance.
 
     This is the frozen v1 external contract for the Kavach substrate
     (ADR-0016). Request and response bodies echo the substrate event

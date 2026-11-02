@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 [project]
 name = "aurvia-kavach"
 version = "0.0.1"
-description = "Kavach Platform — Agent Accountability for Indian BFSI (proprietary, all rights reserved)"
+description = "Kavach Platform — Agent Accountability for Regulated Finance (proprietary, all rights reserved)"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = {text = "Proprietary — All Rights Reserved"}

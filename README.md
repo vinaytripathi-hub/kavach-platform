@@ -2,9 +2,9 @@
 
 # Kavach Platform
 
-**Agent Accountability for Indian BFSI**
+**Agent Accountability for Regulated Finance**
 
-_The trust substrate for AI agents deployed in banking, financial services, and insurance._
+_The accountability runtime for AI agents in banking and payments — mapped to the NIST agentic-IAM tenets, the EU AI Act, and India's RBI/DPDP._
 
 ![License](https://img.shields.io/badge/license-Proprietary-blue)
 ![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
@@ -37,8 +37,8 @@ SDK — Kavach contains no Pramana source code
 > **Positioning.** Microsoft Entra Agent ID and AWS AgentCore sell agent
 > _identity_. Kavach sells what comes after: what the identified agents
 > _do_, with what authorization, with what evidence, with what outcome —
-> for the market that needs it most, Indian BFSI
-> ([ADR-0005](docs/adr/0005-accountability-positioning.md)).
+> for the markets that need it most — regulated finance, US-first, then the EU and India
+> ([ADR-0005](docs/adr/0005-accountability-positioning.md), [ADR-0022](docs/adr/0022-market-sequencing-us-first.md)).
 
 ---
 
@@ -283,12 +283,12 @@ the perimeter.
 
 ## Architecture Decision Records
 
-21 ADRs document every foundational decision — see the
+22 ADRs document every foundational decision — see the
 [ADR index](docs/adr/README.md). ADRs 0001–0014 establish the substrate and
 positioning; 0015–0017 cover the prototype (Pramana packaging, the API
 contract, on-prem deployment); 0018–0019 add signed mandates and the monitor
 capability; 0020–0021 close NIST tenet 04 (session credentials, revocation,
-and Keycloak operator identity).
+and Keycloak operator identity); 0022 sequences the go-to-market US-first.
 
 ---
 

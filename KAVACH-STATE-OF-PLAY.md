@@ -31,7 +31,7 @@
 ## 0. TL;DR snapshot
 
 - **What it is:** a proprietary, **source-available agent-accountability
-  substrate for Indian BFSI** (banking, financial services, insurance). It is
+  substrate for regulated finance** (banking and payments). It is
   **not** an AI model. It is the deterministic governance/accountability layer
   *around* autonomous agents: it records what an agent did, on whose authority,
   within what bounds, with what evidence and outcome, and keeps a human in
@@ -81,14 +81,17 @@ step-up, on a tamper-evident chain you can verify" is.
 2. **BFSI-first, not BFSI-only.** BFSI is the wedge (compliance urgency,
    willingness to pay). The substrate is architected to generalize to other
    regulated verticals (healthcare, government, enterprise SaaS).
-3. **Indian-sovereign, globally relevant.** India-first market; substrate
-   reusable globally.
+3. **US-first, globally relevant.** Market sequencing is US regulated finance
+   first, then the EU, then India (ADR-0022, superseding the market-choice
+   sections of ADR-0005); the substrate and its data residency stay
+   deployment-pluggable (ADR-0004/0017).
 
 Brand strata: **Aurvia** = the company / trust infrastructure · **Pramana** =
 the open-source identity substrate beneath · **Kavach** = the BFSI commercial
-layer above. One-liner: *"Agent Accountability for Indian BFSI."* Tagline: *"The
-trust substrate for AI agents deployed in banking, financial services, and
-insurance."*
+layer above. One-liner: *"Agent Accountability for Regulated Finance."*
+Tagline: *"The accountability runtime for AI agents in banking and payments —
+mapped to the NIST agentic-IAM tenets, the EU AI Act, and India's RBI/DPDP."*
+Market sequencing is US-first (ADR-0022).
 
 **The claim (strategy brief).** *"Kavach is the only architecture we are aware
 of that maps one-to-one to the ten design tenets published by NIST/NCCoE."* The

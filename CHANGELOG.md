@@ -8,6 +8,25 @@ once the first stable release lands.
 
 ## [Unreleased]
 
+### Changed — Market repositioning: US-first regulated finance
+
+- **ADR-0022 (Accepted)** — market sequencing re-ordered to US-first
+  regulated finance, then the EU, then India, superseding the
+  market-choice sections of ADR-0005 (the "Indian-sovereign,
+  globally-relevant" section, the one-liner, and the tagline). The rest
+  of ADR-0005 stands; data residency remains deployment-pluggable per
+  ADR-0004/0017. Rationale: the NIST agentic-IAM tenets (27 Oct 2026),
+  FIDO's agentic-payments work (AP2, Verifiable Intent), and Reg E
+  liability questions put the vocabulary and the first design partners
+  in the US.
+- **New public positioning strings** across README, STATUS, the
+  package metadata (`aurvia-kavach`, `@aurvia/kavach`), the API
+  description, the business guide, and the strategy brief — one-liner
+  "Agent Accountability for Regulated Finance" and tagline "The
+  accountability runtime for AI agents in banking and payments — mapped
+  to the NIST agentic-IAM tenets, the EU AI Act, and India's RBI/DPDP."
+  No package version bump; the string change ships with the Phase 2 exit.
+
 ### Added — Signed mandates, AP2 verification, and monitoring
 
 - **ADR-0018 (Accepted)** — signed mandates as a substrate capability.

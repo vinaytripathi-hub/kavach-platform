@@ -1,5 +1,10 @@
 # Agent Trust Platform — Positioning Brief
 
+**Agent Accountability for Regulated Finance.** The accountability runtime for
+AI agents in banking and payments — mapped to the NIST agentic-IAM tenets, the
+EU AI Act, and India's RBI/DPDP. Market sequencing is US-first, then the EU,
+then India (ADR-0022).
+
 One page. The claim, the architecture, the gap, the ask.
 
 ## The claim

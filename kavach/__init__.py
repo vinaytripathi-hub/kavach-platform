@@ -1,4 +1,4 @@
-"""Kavach Platform — Agent Accountability for Indian BFSI.
+"""Kavach Platform — Agent Accountability for Regulated Finance.
 
 This is the proprietary commercial layer built atop the Pramana Protocol
 (AGPL-3.0 open-source substrate). See LICENSE and NOTICE at the repository

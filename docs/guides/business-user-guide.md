@@ -28,7 +28,7 @@ questions they always ask — and "the AI did it" is not an acceptable answer.
 
 **Kavach is the accountability layer around those agents.** It is *not* an AI
 model and it does not make your agents smarter. It is a **source-available
-agent-accountability substrate** purpose-built for Indian BFSI that:
+agent-accountability substrate** purpose-built for regulated finance that:
 
 - **Keeps a human in control** of what agents are allowed to do, by requiring
   explicit human approval for high-impact actions.

@@ -1,7 +1,7 @@
 {
   "name": "@aurvia/kavach",
   "version": "0.0.1",
-  "description": "TypeScript SDK for the Kavach Platform /v1 API — agent accountability for Indian BFSI.",
+  "description": "TypeScript SDK for the Kavach Platform /v1 API — agent accountability for regulated finance.",
   "license": "LicenseRef-Proprietary",
   "author": "Vinay Tripathi <vinay@aurviaglobal.com>",
   "type": "module",
