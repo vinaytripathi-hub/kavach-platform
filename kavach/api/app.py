@@ -401,6 +401,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
         body: m.CredentialIssueRequest,
         request: Request,
         principal: AgentPrincipal = Depends(require_agent),
+        authorization: str | None = Header(default=None),
     ) -> m.CredentialIssueResult:
         _ensure_same_agent(principal, agent_id)
         if principal.verified.credential_id:
@@ -415,6 +416,7 @@ def create_app(substrate: Substrate) -> FastAPI:  # noqa: PLR0915
                 tenant_id=principal.tenant_id,
                 agent_id=agent_id,
                 scopes=list(principal.verified.scopes),
+                holder_token=_bearer(authorization),
                 ttl_seconds=body.ttl_seconds,
             )
         except PermissionError as exc:

@@ -14,6 +14,7 @@ run end-to-end without provisioning real Pramana credentials.
 from __future__ import annotations
 
 from kavach.capabilities.sdk_bridge.contracts import VerifiedAgent
+from kavach.capabilities.sdk_bridge.legacy import reject_legacy_outside_fake
 
 # Token form ``agent:<id>:<scopes>`` has three colon-separated parts.
 _SCOPED_TOKEN_PARTS = 3
@@ -33,6 +34,9 @@ class FakeCredentialVerifier:
         required_action: str | None = None,
     ) -> VerifiedAgent:
         del required_action  # not used by the fake
+        legacy = reject_legacy_outside_fake(token, mode="fake")
+        if legacy is not None:
+            return legacy
         if self._jwt_secret and token.count(".") == 2:  # noqa: PLR2004 - JWT has two dots
             from kavach.capabilities.credentials import is_session_token, verify_session
 

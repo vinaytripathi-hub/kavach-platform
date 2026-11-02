@@ -23,12 +23,21 @@ from kavach.capabilities.credentials import (
     mint_session,
     verify_refresh,
 )
+from kavach.capabilities.credentials.family import (
+    ROTATION_REASON,
+    family_credential_ids,
+    family_operator_revoked,
+)
 from kavach.capabilities.mandate import MandateVerifier, VerifiedMandate
 from kavach.capabilities.mandate._internal.ap2_adapter import AP2MandateVerifier, issue_ap2_mandate
 from kavach.capabilities.mandate._internal.fake import issue_fake_mandate
 from kavach.capabilities.mandate._internal.tokens import mandate_digest
 from kavach.capabilities.policy import PolicyDecision, PolicyEngine, PolicyRuleSet
-from kavach.capabilities.sdk_bridge import VerifiedAgent
+from kavach.capabilities.sdk_bridge import (
+    CredentialVerifier,
+    FakeCredentialVerifier,
+    VerifiedAgent,
+)
 from kavach.capabilities.storage import (
     AgentCredentialRow,
     AgentRegistrationRow,
@@ -125,6 +134,7 @@ class SubstrateService:
         jwt_secret: bytes = b"",
         credential_ttl_seconds: int = 900,
         credential_audience: str = "kavach",
+        verifier: CredentialVerifier | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._bus = bus
@@ -136,6 +146,7 @@ class SubstrateService:
         self._jwt_secret = jwt_secret
         self._credential_ttl_seconds = credential_ttl_seconds
         self._credential_audience = credential_audience
+        self._verifier = verifier if verifier is not None else FakeCredentialVerifier(jwt_secret)
 
     # -- writes -------------------------------------------------------------
 
@@ -297,6 +308,7 @@ class SubstrateService:
         tenant_id: str,
         agent_id: str,
         scopes: list[str],
+        holder_token: str,
         ttl_seconds: int | None = None,
     ) -> IssuedCredential:
         """Mint a ≤15-minute session credential after the holder is verified."""
@@ -313,8 +325,25 @@ class SubstrateService:
             ttl_seconds=ttl,
         )
         async with session_scope(self._session_factory) as session:
-            session.add(_credential_row(tenant_id, agent_id, issued, kind="session"))
-            session.add(_credential_row(tenant_id, agent_id, issued, kind="refresh"))
+            session.add(
+                _credential_row(
+                    tenant_id,
+                    agent_id,
+                    issued,
+                    kind="session",
+                    holder_token=holder_token,
+                )
+            )
+            session.add(
+                _credential_row(
+                    tenant_id,
+                    agent_id,
+                    issued,
+                    kind="refresh",
+                    holder_token=holder_token,
+                    parent_credential_id=issued.credential_id,
+                )
+            )
         return issued
 
     async def refresh_session_credential(
@@ -326,34 +355,55 @@ class SubstrateService:
             raise ValueError("Refresh token is invalid.")
         self._reject_refresh_temporal(claims)
         async with session_scope(self._session_factory) as session:
-            if await session.get(AgentRevocationRow, (tenant_id, claims.agent_id)) is not None:
-                raise PermissionError(f"Agent '{claims.agent_id}' is revoked.")
-            revoked_refresh = await session.get(
-                CredentialRevocationRow, (tenant_id, claims.credential_id)
-            )
-            if revoked_refresh is not None:
-                raise PermissionError("Refresh token is revoked.")
+            holder_token = await self._holder_for_refresh(session, tenant_id, claims)
+        verified = self._verifier.verify(holder_token, expected_audience=self._credential_audience)
+        if not verified.verified or verified.agent_id != claims.agent_id:
+            raise ValueError("Holder credential is no longer valid.")
+        temporal = enforce_temporal(verified, utcnow())
+        if temporal == "credential_expired":
+            raise PermissionError("Holder credential expired.")
+        if temporal == "credential_not_yet_valid":
+            raise PermissionError("Holder credential not yet valid.")
         issued = mint_session(
             agent_id=claims.agent_id,
-            scopes=claims.scopes,
+            scopes=list(verified.scopes),
             audience=self._credential_audience,
             key=self._jwt_secret,
             ttl_seconds=self._credential_ttl_seconds,
             session_id=claims.session_id,
         )
         async with session_scope(self._session_factory) as session:
+            await self._reject_revoked_refresh(session, tenant_id, claims)
             session.add(
                 CredentialRevocationRow(
                     tenant_id=tenant_id,
                     credential_id=claims.credential_id,
                     agent_id=claims.agent_id,
                     revoked_by="refresh",
-                    reason="rotated",
+                    reason=ROTATION_REASON,
                     revoked_at=utcnow(),
                 )
             )
-            session.add(_credential_row(tenant_id, claims.agent_id, issued, kind="session"))
-            session.add(_credential_row(tenant_id, claims.agent_id, issued, kind="refresh"))
+            session.add(
+                _credential_row(
+                    tenant_id,
+                    claims.agent_id,
+                    issued,
+                    kind="session",
+                    holder_token=holder_token,
+                    parent_credential_id=claims.credential_id,
+                )
+            )
+            session.add(
+                _credential_row(
+                    tenant_id,
+                    claims.agent_id,
+                    issued,
+                    kind="refresh",
+                    holder_token=holder_token,
+                    parent_credential_id=claims.credential_id,
+                )
+            )
         return issued
 
     async def revoke_agent(
@@ -394,18 +444,27 @@ class SubstrateService:
             if row is None:
                 raise KeyError(f"No credential '{credential_id}'.")
             existing = await session.get(CredentialRevocationRow, (tenant_id, credential_id))
-            if existing is not None:
+            if existing is not None and existing.reason != ROTATION_REASON:
                 raise ValueError(f"Credential '{credential_id}' already revoked.")
-            session.add(
-                CredentialRevocationRow(
-                    tenant_id=tenant_id,
-                    credential_id=credential_id,
-                    agent_id=row.agent_id,
-                    revoked_by=revoked_by,
-                    reason=reason,
-                    revoked_at=utcnow(),
-                )
-            )
+            family = await family_credential_ids(session, tenant_id, credential_id)
+            now = utcnow()
+            for member_id in family:
+                hit = await session.get(CredentialRevocationRow, (tenant_id, member_id))
+                if hit is None:
+                    session.add(
+                        CredentialRevocationRow(
+                            tenant_id=tenant_id,
+                            credential_id=member_id,
+                            agent_id=row.agent_id,
+                            revoked_by=revoked_by,
+                            reason=reason,
+                            revoked_at=now,
+                        )
+                    )
+                elif member_id == credential_id and hit.reason == ROTATION_REASON:
+                    hit.reason = reason
+                    hit.revoked_by = revoked_by
+                    hit.revoked_at = now
             event = CredentialRevoked(
                 tenant_id=tenant_id,
                 agent_id=row.agent_id,
@@ -415,6 +474,29 @@ class SubstrateService:
             )
             await self._bus.publish(session, event)
         return event
+
+    async def _holder_for_refresh(
+        self, session: AsyncSession, tenant_id: str, claims: RefreshClaims
+    ) -> str:
+        await self._reject_revoked_refresh(session, tenant_id, claims)
+        row = await session.get(AgentCredentialRow, (tenant_id, claims.credential_id))
+        holder = row.holder_token if row is not None else None
+        if not holder:
+            raise ValueError("Refresh token is invalid.")
+        return holder
+
+    async def _reject_revoked_refresh(
+        self, session: AsyncSession, tenant_id: str, claims: RefreshClaims
+    ) -> None:
+        if await session.get(AgentRevocationRow, (tenant_id, claims.agent_id)) is not None:
+            raise PermissionError(f"Agent '{claims.agent_id}' is revoked.")
+        revoked_refresh = await session.get(
+            CredentialRevocationRow, (tenant_id, claims.credential_id)
+        )
+        if revoked_refresh is not None:
+            raise PermissionError("Refresh token is revoked.")
+        if await family_operator_revoked(session, tenant_id, claims.credential_id):
+            raise PermissionError("Credential family is revoked.")
 
     def _reject_refresh_temporal(self, claims: RefreshClaims) -> None:
         verified = VerifiedAgent(
@@ -675,6 +757,8 @@ def _credential_row(
     issued: IssuedCredential,
     *,
     kind: str,
+    holder_token: str,
+    parent_credential_id: str | None = None,
 ) -> AgentCredentialRow:
     if kind == "refresh":
         credential_id = issued.refresh_credential_id
@@ -691,4 +775,6 @@ def _credential_row(
         scopes=list(issued.scopes),
         issued_at=utcnow(),
         expires_at=expires_at,
+        parent_credential_id=parent_credential_id,
+        holder_token=holder_token,
     )

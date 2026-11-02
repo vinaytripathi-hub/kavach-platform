@@ -69,10 +69,18 @@ Exchange and refresh are API operations:
   credential; response is the session JWT plus refresh token.
 - `POST /v1/credentials/refresh` — bearer is the refresh token.
 
+Refresh does not trust the refresh token alone. Before minting,
+`refresh_session_credential` re-verifies the upstream holder credential
+through `sdk_bridge.verify` (the same verifier that accepted it at
+issuance). The holder token is stored with the credential family for
+that check. A holder that no longer verifies does not produce a new
+session credential.
+
 The legacy `agent:<id>:<scopes>` grammar stays valid in `fake` mode so
 existing demos keep running. It has no `exp`. Agent-level revocation
 still applies to it. It is a development credential, not a session
-credential, and production (`pramana` mode) does not accept it.
+credential. Every presentation logs a warning. Production (`pramana`
+mode, and any mode other than `fake`) rejects it.
 
 **2. `exp` and `nbf` are enforced at the API boundary**, before any
 policy effect. `require_agent` verifies the presented token, then:
@@ -104,8 +112,18 @@ Both are operator actions (ADR-0021). A revoked agent or credential is
 denied on the **next** request. The check is a primary-key read inside
 the request, not a projection lag, so the denial is well under one
 second. Revoking an agent denies every later presentation of that
-agent, including a freshly minted session credential. Revoking a
-credential denies that `jti` only.
+agent, including a freshly minted session credential.
+
+A session credential and the refresh tokens that rotate it are one
+credential family. Each refreshed credential records
+`parent_credential_id` of the credential it was minted from: the
+session credential at issuance, and the presented refresh credential
+on rotation. Revoking any credential in the family revokes the family.
+`refresh_session_credential` checks that revocation and returns 401
+`credential_revoked` without minting a replacement, and a session
+token in that family is denied on the next request. Retiring a refresh
+token because it was rotated (`reason=rotated`) denies that refresh
+`jti` only and does not revoke the family.
 
 **4. DPoP is deferred.** This phase ships TTL, refresh, and
 revocation. Proof-of-possession (RFC 9449 `DPoP`, `jkt` binding) is

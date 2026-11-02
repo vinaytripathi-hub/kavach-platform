@@ -124,6 +124,7 @@ def build_substrate(
         jwt_secret=config.jwt_secret.encode("utf-8"),
         credential_ttl_seconds=config.agent_credential_ttl_seconds,
         credential_audience=config.expected_audience,
+        verifier=verifier,
     )
 
     return Substrate(

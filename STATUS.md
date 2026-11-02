@@ -10,11 +10,11 @@ _Agent accountability for Indian BFSI. Proprietary, source-available._
 
 | | |
 |---|---|
-| **Phase 2a (NIST tenet 04)** | **CLOSED** — ≤15-minute session credentials, agent/credential/mandate revocation before policy effect, Keycloak OIDC (no static operator secret), CAEP/SSF signals. Gate tests in `tests/api/test_tenet04.py`. |
+| **Phase 2a (NIST tenet 04)** | **CLOSED** — session credentials, credential-family revocation, and holder re-verification on refresh. Re-checked on SQLite and Postgres 16: a revoked credential's refresh tokens return `401 credential_revoked` and do not mint a new session. |
 | **Working prototype (Phase 1)** | **Shipped** — substrate, `/v1` API, Customer Service use case, operator console, on-prem Docker packaging |
 | **SDK packaging + publish (Phase 1.5)** | **CLOSED** — `aurvia-kavach` live on PyPI and `@aurvia/kavach` live on npm (both `0.0.1`). See [gate-closure evidence](docs/guides/phase-1.5-gate-closure.md). |
-| **Tests** | **170 unit/integration passing**, 3 integration skipped (Postgres URL, live Keycloak), 2 e2e deselected from the push gate |
-| **Coverage** | **83%** (push gate: 70%; capabilities floor 80%) |
+| **Tests** | **176 unit passing**; Postgres integration passing (full flow, mandate revocation, credential-family refresh); 2 e2e passing. Live Keycloak test still skips without an issuer. |
+| **Coverage** | **82.8%** on the unit run (push gate: 70%; CI unit floor 80%) |
 | **ADRs** | **21** — see [`docs/adr/README.md`](docs/adr/README.md) |
 | **License** | Proprietary, source-available ([LICENSE](LICENSE), [NOTICE](NOTICE)); built on the AGPL-3.0 Pramana Protocol via its public SDK only |
 

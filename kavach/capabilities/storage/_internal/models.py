@@ -149,6 +149,8 @@ class AgentCredentialRow(Base):
     scopes: Mapped[list[str]] = mapped_column(JSON)
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    parent_credential_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    holder_token: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class AgentRevocationRow(Base):
@@ -164,7 +166,11 @@ class AgentRevocationRow(Base):
 
 
 class CredentialRevocationRow(Base):
-    """Revocation of one credential ``jti`` (ADR-0020)."""
+    """Revocation of one credential ``jti`` (ADR-0020).
+
+    ``reason="rotated"`` retires a refresh token and does not revoke the
+    rest of its credential family. Any other reason revokes the family.
+    """
 
     __tablename__ = "credential_revocations"
 

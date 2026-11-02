@@ -172,9 +172,10 @@ long-lived password. Kavach issues an **access credential** that lasts **at
 most 15 minutes**. The credential can be **refreshed**, so legitimate work can continue. A
 credential that has **expired**, or that is **not yet valid**, is refused.
 
-An **administrator** can **revoke an agent** or **revoke a single credential**.
-The next request from that agent or credential is **denied, in under a
-second**. Mandate revocation, described above, continues to work the same way.
+An **administrator** can **revoke an agent** or **revoke a credential**.
+Revoking a credential also stops every refresh of that credential from
+issuing a new one. The next request is **denied, in under a second**.
+Mandate revocation, described above, continues to work the same way.
 
 **Operator sign-in.** Operators no longer share one password. Each person
 **signs in through the organization's identity system**. The reference
@@ -275,8 +276,9 @@ In business terms, the tenets fully implemented and tested today include:
 
 - **Short-lived, revocable authorization (tenet 04)** — agent access
   credentials last at most 15 minutes, can be refreshed, and are refused when
-  expired or not yet valid. An administrator can revoke an agent or a single
-  credential, and the next request is denied in under a second. Mandates can
+  expired or not yet valid. An administrator can revoke an agent or a
+  credential, which also stops that credential's refresh tokens from issuing
+  a new one. The next request is denied in under a second. Mandates can
   be revoked, and a mandate can carry a not-before time. Operators sign in as
   individuals through the organization's identity system.
 - **Human-in-the-loop triggers** — risk-based escalation to a person.
@@ -327,7 +329,8 @@ Being honest about scope is a core principle of this guide.
 - **Short-lived credentials, revocation, and individual operator sign-in.**
   Agent access credentials last at most 15 minutes, can be refreshed, and are
   refused when expired or not yet valid. An administrator can revoke an agent
-  or a single credential; the next request is denied in under a second.
+  or a credential, which also stops that credential's refresh tokens from
+  issuing a new one; the next request is denied in under a second.
   Mandates remain revocable and can include a not-before time. Operators sign
   in through the organization's identity system — the reference on-premise
   install includes Keycloak — in the roles operator, auditor, or admin,
@@ -377,8 +380,9 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
   revoked before expiry, and can include a not-before time.
 - **Access credential** — a short-lived permission Kavach issues to an agent.
   It lasts at most 15 minutes, can be refreshed, and is refused if it is
-  expired or not yet valid. An administrator can revoke one credential, or the
-  agent that holds it; the next request is denied in under a second.
+  expired or not yet valid. An administrator can revoke one credential — which
+  also stops its refresh tokens from issuing a new one — or the agent that
+  holds it; the next request is denied in under a second.
 - **Not-before time** — the earliest moment a mandate may be used.
 - **Tenant** — the organization boundary recorded on a person's sign-in. A
   person can act only inside their own tenant.
@@ -424,7 +428,8 @@ describe it and the "Covered as of Phase N" marker at the top will advance.
   partner developers.**
 - **Phase 2a — short-lived, revocable authorization:** agent credentials last
   at most 15 minutes and can be refreshed; expired or not-yet-valid credentials
-  are refused; an administrator can revoke an agent or a credential, and the
+  are refused; an administrator can revoke an agent or a credential, which
+  also stops that credential's refresh tokens from issuing a new one, and the
   next request is denied in under a second; mandates can carry a not-before
   time; operators sign in individually through the organization's identity
   system (the reference on-premise install includes Keycloak) as operator,

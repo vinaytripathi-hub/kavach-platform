@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from kavach.api.problems import problem_type
 from kavach.capabilities.credentials import enforce_temporal, is_session_token, verify_session
+from kavach.capabilities.credentials.family import family_operator_revoked
 from kavach.capabilities.sdk_bridge import VerifiedAgent
 from kavach.capabilities.storage import AgentRevocationRow, CredentialRevocationRow, session_scope
 from kavach.composition import Substrate
@@ -120,6 +121,8 @@ async def require_agent(
                 CredentialRevocationRow, (tenant_id, verified.credential_id)
             )
             if cred_hit is not None:
+                raise ProblemError(401, "credential_revoked", "Credential is revoked.")
+            if await family_operator_revoked(session, tenant_id, verified.credential_id):
                 raise ProblemError(401, "credential_revoked", "Credential is revoked.")
     return AgentPrincipal(agent_id=verified.agent_id, tenant_id=tenant_id, verified=verified)
 

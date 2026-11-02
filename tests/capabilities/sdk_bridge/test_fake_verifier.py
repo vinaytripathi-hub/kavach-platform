@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
+import pytest
+
 from kavach.capabilities.sdk_bridge import FakeCredentialVerifier, make_verifier
 
 
@@ -25,6 +29,15 @@ def test_invalid_token_rejected() -> None:
     result = v.verify("invalid-token", expected_audience="kavach")
     assert not result.verified
     assert not result.authorizes("kyc.document.verify")
+
+
+def test_legacy_agent_token_logs_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    v = FakeCredentialVerifier()
+    logger = "kavach.capabilities.sdk_bridge.legacy"
+    with caplog.at_level(logging.WARNING, logger=logger):
+        result = v.verify("agent:agent-1:kyc", expected_audience="kavach")
+    assert result.verified
+    assert any("Legacy agent:" in record.message for record in caplog.records)
 
 
 def test_make_verifier_default_is_fake() -> None:

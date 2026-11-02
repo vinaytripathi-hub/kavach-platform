@@ -239,8 +239,10 @@ no expiry:
 - `agent:<agent_id>:<scope1,scope2,...>` → verified, listed scopes
 - anything starting with `invalid` → not verified → `401`
 
-`pramana` mode does not accept that grammar. Agent-level revocation still
-applies to a legacy `agent:` token: the next request is `401 agent_revoked`.
+Every presentation of an `agent:` token logs a warning. Any verifier mode
+other than `fake` rejects it with `401 unauthorized`. Agent-level revocation
+still applies to a legacy `agent:` token accepted in fake mode: the next
+request is `401 agent_revoked`.
 
 **Session JWT.** HS256, signed with `KAVACH_JWT_SECRET`, `typ` claim
 `kavach-session`. `require_agent` enforces lifetime **before** any policy
@@ -509,10 +511,12 @@ value above the cap is clamped; a non-positive value is
 The issue body is `{"ttl_seconds": 300}` (`ttl_seconds` optional). The
 result is `credential_id`, `session_id`, `token`, `expires_at`,
 `refresh_token`, and `refresh_expires_at`. The refresh token lasts 24
-hours. `POST /v1/credentials/refresh` checks that refresh token, mints a
-new session JWT and a new refresh token, and retires the previous refresh
-`jti` (a row in `credential_revocations`, `revoked_by` `refresh`). Rows
-are stored in `agent_credentials` (migration `0003_credentials`).
+hours. `POST /v1/credentials/refresh` checks that refresh token, re-verifies
+the holder credential through the SDK bridge, mints a new session JWT and a
+new refresh token, and retires the previous refresh `jti` (a row in
+`credential_revocations`, `reason` `rotated`). That rotation does not revoke
+the family. Rows in `agent_credentials` record `parent_credential_id` and the
+holder token (migration `0004_credential_family`).
 
 ```bash
 curl -s -X POST http://localhost:8000/v1/agents/agent-cs-01/credentials \
@@ -542,7 +546,10 @@ Revoking a credential inserts `credential_revocations` (keyed by `jti`)
 and emits `CredentialRevoked`. Both are checked in `require_agent` on the
 **next** request (§3). Revoking an agent denies every later presentation
 of that agent, including a freshly minted session JWT and a legacy
-`agent:` token. Revoking a credential denies that `jti` only. Unknown
+`agent:` token. Revoking a credential revokes its whole family: the session
+token, the refresh token that rotates it, and every later refresh in that
+chain. A refresh of any of those tokens returns `401 credential_revoked`
+and does not mint a replacement. Unknown
 credential ids are `404 not_found`. Mandate revocation is unchanged
 (§5) and is still `require_operator`.
 
@@ -1094,7 +1101,8 @@ rather than unit tests and are omitted from the coverage source.
 ### Phase 2a gate (NIST tenet 04)
 
 NIST tenet 04 (short-lived, dynamic, revocable authorization) is
-**Implemented**. The scorecard in
+**Implemented**. Credential-family revocation was re-checked on SQLite and
+on Postgres 16. The scorecard in
 [`docs/compliance/nist-agentic-iam-mapping.md`](../compliance/nist-agentic-iam-mapping.md)
 is **7 / 3 / 0**: seven Implemented (tenets 04–10), three Partial (01–03),
 zero Weak. There are 21 accepted ADRs.
@@ -1105,6 +1113,12 @@ Gate tests:
 |------|------|
 | `test_revoked_agent_denied_on_next_request` | `tests/api/test_tenet04.py` |
 | `test_revoked_credential_denied_on_next_request` | `tests/api/test_tenet04.py` |
+| `test_revoked_credential_refresh_returns_401` | `tests/api/test_tenet04.py` |
+| `test_prerevocation_refresh_token_unusable_afterward` | `tests/api/test_tenet04.py` |
+| `test_revoked_chain_blocks_every_earlier_refresh_token` | `tests/api/test_tenet04.py` |
+| `test_refresh_rechecks_holder_credential` | `tests/api/test_tenet04.py` |
+| `test_legacy_agent_token_rejected_when_verifier_mode_is_not_fake` | `tests/api/test_tenet04.py` |
+| `test_revoked_credential_family_cannot_refresh_on_postgres` | `tests/integration/test_postgres_substrate.py` |
 | `test_expired_session_is_401_problem` | `tests/api/test_tenet04.py` |
 | `test_not_yet_valid_session_is_401_problem` | `tests/api/test_tenet04.py` |
 | `test_caep_event_received_within_one_second` | `tests/api/test_tenet04.py` |
@@ -1130,8 +1144,10 @@ Gate tests:
   or operator access token is outside `nbf`/`exp`. Both are
   `application/problem+json` with a `type` under
   `https://kavach.invalid/problems/`. Legacy `agent:` tokens have no expiry.
-- **`401 agent_revoked` / `credential_revoked`** — `require_agent` found a
-  row in `agent_revocations` or `credential_revocations` on this request.
+- **`401 agent_revoked` / `credential_revoked`** — `require_agent` found an
+  agent revocation, a credential revocation, or an operator revocation
+  anywhere in that credential's family. `POST /v1/credentials/refresh`
+  returns `credential_revoked` for the same family.
 - **`403 forbidden`** — the OIDC token's role is not allowed for the route,
   its tenant claim does not match `X-Kavach-Tenant`, or an agent tried to
   act on an `agent_id` that is not its own.

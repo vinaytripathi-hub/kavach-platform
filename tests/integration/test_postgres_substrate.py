@@ -139,3 +139,52 @@ async def test_revocation_prevents_reuse_on_postgres(pg_client: httpx.AsyncClien
     )
     assert decision.status_code == 200, decision.text
     assert decision.json()["outcome"] == "deny"
+
+
+async def test_revoked_credential_family_cannot_refresh_on_postgres(
+    pg_client: httpx.AsyncClient,
+) -> None:
+    """The refresh hole stays closed on Postgres, not only on SQLite."""
+    agent_id = f"agent-{uuid.uuid4().hex[:8]}"
+    issued = await pg_client.post(
+        f"/v1/agents/{agent_id}/credentials",
+        json={"ttl_seconds": 300},
+        headers=_agent_headers(agent_id),
+    )
+    assert issued.status_code == 200, issued.text
+    first = issued.json()
+    rotated = await pg_client.post(
+        "/v1/credentials/refresh",
+        headers={
+            "Authorization": f"Bearer {first['refresh_token']}",
+            "X-Kavach-Tenant": "bank-1",
+        },
+    )
+    assert rotated.status_code == 200, rotated.text
+    current = rotated.json()
+    revoked = await pg_client.post(
+        f"/v1/credentials/{current['credential_id']}/revoke",
+        json={"revoked_by": "op-1", "reason": "postgres"},
+        headers=_operator_headers(),
+    )
+    assert revoked.status_code == 200, revoked.text
+    for refresh_token in (first["refresh_token"], current["refresh_token"]):
+        denied = await pg_client.post(
+            "/v1/credentials/refresh",
+            headers={
+                "Authorization": f"Bearer {refresh_token}",
+                "X-Kavach-Tenant": "bank-1",
+            },
+        )
+        assert denied.status_code == 401, denied.text
+        assert denied.json()["code"] == "credential_revoked"
+    action = await pg_client.post(
+        f"/v1/agents/{agent_id}/actions",
+        json={"session_id": "s", "action_type": "kyc.x", "parameters": {}},
+        headers={
+            "Authorization": f"Bearer {current['token']}",
+            "X-Kavach-Tenant": "bank-1",
+        },
+    )
+    assert action.status_code == 401, action.text
+    assert action.json()["code"] == "credential_revoked"

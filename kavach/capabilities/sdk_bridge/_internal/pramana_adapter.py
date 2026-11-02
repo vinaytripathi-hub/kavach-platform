@@ -10,6 +10,7 @@ absent (offline mode uses the fake verifier instead).
 from __future__ import annotations
 
 from kavach.capabilities.sdk_bridge.contracts import VerifiedAgent
+from kavach.capabilities.sdk_bridge.legacy import reject_legacy_outside_fake
 
 
 class LocalPramanaAdapter:
@@ -22,6 +23,9 @@ class LocalPramanaAdapter:
         expected_audience: str,
         required_action: str | None = None,
     ) -> VerifiedAgent:
+        legacy = reject_legacy_outside_fake(token, mode="pramana")
+        if legacy is not None:
+            return legacy
         try:
             import pramana
         except ImportError:
