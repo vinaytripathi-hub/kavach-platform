@@ -57,7 +57,7 @@ metadata is updated but its file remains and its number is preserved.
 | 0002 | Accepted | Substrate-first build order |
 | 0003 | Accepted | Pramana–Kavach IP separation |
 | 0004 | Accepted | Self-hosted Postgres 16 on Yotta Yntraa for data residency |
-| 0005 | Accepted | "Accountability for BFSI agents" market positioning |
+| 0005 | Accepted (market-choice superseded in part by 0022) | "Accountability for BFSI agents" market positioning |
 | 0006 | Accepted | TDD as the engineering default |
 | 0007 | Accepted | Modular capability architecture with formal extension points |
 | 0008 | Accepted | Domain events as the substrate's primary output |
@@ -74,6 +74,7 @@ metadata is updated but its file remains and its number is preserved.
 | 0019 | Accepted | Monitor capability and anomaly feedback loop (NIST tenet 09) |
 | 0020 | Accepted | Revocation and credential lifetime (NIST tenet 04) |
 | 0021 | Accepted | Operator identity via Keycloak OIDC (NIST tenet 04) |
+| 0022 | Accepted | Market sequencing: US-first regulated finance |
 
 ADRs 0001–0014 cover the foundational and advanced architectural
 commitments for Kavach Platform's substrate and product positioning,
@@ -84,8 +85,10 @@ external HTTP API contract, and the on-prem deployment posture. ADRs
 and 09 (continuous monitoring). ADR-0020 addresses tenet 04's agent-side half: short-lived session
 credentials, `exp`/`nbf` enforcement, and agent/credential revocation.
 ADR-0021 addresses the operator half: Keycloak OIDC replaces the
-static shared operator token. Subsequent ADRs will be added as new
-architectural decisions arise.
+static shared operator token. ADR-0022 re-sequences the go-to-market
+to US-first regulated finance, superseding the market-choice sections
+of ADR-0005 (the rest of ADR-0005 stands). Subsequent ADRs will be
+added as new architectural decisions arise.
 
 ## Adding a new ADR
 

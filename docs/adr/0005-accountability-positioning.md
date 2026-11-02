@@ -1,6 +1,6 @@
 # ADR-0005 — "Accountability for BFSI agents" market positioning
 
-**Status:** Accepted
+**Status:** Accepted — market-choice sections superseded in part by ADR-0022
 **Date:** 2026-05-24
 
 ## Context
